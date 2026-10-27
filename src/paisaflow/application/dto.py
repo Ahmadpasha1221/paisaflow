@@ -60,6 +60,9 @@ class TransactionDto:
     status: str
     notes: Optional[str]
     affected_accounts: str
+    created_at: str = ""
+    updated_at: str = ""
+    voided_at: str = ""
 
 
 @dataclass(frozen=True)

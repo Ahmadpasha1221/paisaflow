@@ -55,6 +55,12 @@ class IncompatibleCategoryError(FinancialDomainError):
     pass
 
 
+class InvalidDebtPaymentError(FinancialDomainError):
+    """Raised when a debt repayment is invalid (non-positive, overpayment, or settled debt)."""
+
+    pass
+
+
 class DestructiveActionRestrictedError(FinancialDomainError):
     """Raised when attempting to delete an entity with existing financial history."""
 

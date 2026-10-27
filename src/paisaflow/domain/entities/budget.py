@@ -1,6 +1,6 @@
 """Budget entity representing category or person spending limits over a period."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
 from decimal import ROUND_HALF_UP, Decimal
 from enum import Enum
@@ -35,8 +35,8 @@ class Budget:
     alert_threshold_90: bool = True
     alert_threshold_100: bool = True
     is_active: bool = True
-    created_at: datetime = datetime.now(timezone.utc)
-    updated_at: datetime = datetime.now(timezone.utc)
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
     def __post_init__(self) -> None:
         if not self.name or not self.name.strip():

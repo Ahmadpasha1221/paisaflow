@@ -32,12 +32,28 @@ from paisaflow.domain.entities.transaction import (
 )
 from paisaflow.domain.exceptions import (
     AccountArchivedError,
+    CategoryArchivedError,
     EntityNotFoundError,
+    IncompatibleCategoryError,
+    InvalidDebtPaymentError,
     InvalidTransferError,
 )
 from paisaflow.domain.policies.ledger_policy import LedgerPolicy
 from paisaflow.domain.value_objects.money import Money
 from paisaflow.infrastructure.database.unit_of_work import SqlAlchemyUnitOfWork
+
+
+def _format_timestamp(value: Optional[datetime]) -> str:
+    """Render a stored UTC timestamp in local time for display in the UI.
+
+    SQLite hands back naive datetimes, so anything without a tzinfo is treated as UTC
+    (every writer stores ``datetime.now(timezone.utc)``).
+    """
+    if value is None:
+        return ""
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return value.astimezone().strftime("%d %b %Y, %H:%M")
 
 
 class PersonService:
@@ -260,9 +276,8 @@ class TransactionService:
             if acct.is_archived:
                 raise AccountArchivedError("Cannot post transactions to an archived account.")
 
-            cat = uow.categories.get_by_id(category_id)
-            if not cat:
-                raise EntityNotFoundError(f"Category {category_id} not found.")
+            self._validate_person(uow, person_id)
+            self._validate_category(uow, category_id, CategoryType.INCOME)
 
             txn = Transaction(
                 id=None,
@@ -309,9 +324,8 @@ class TransactionService:
             if acct.is_archived:
                 raise AccountArchivedError("Cannot post transactions to an archived account.")
 
-            cat = uow.categories.get_by_id(category_id)
-            if not cat:
-                raise EntityNotFoundError(f"Category {category_id} not found.")
+            self._validate_person(uow, person_id)
+            self._validate_category(uow, category_id, CategoryType.EXPENSE)
 
             txn = Transaction(
                 id=None,
@@ -361,6 +375,7 @@ class TransactionService:
                 raise EntityNotFoundError("Source or destination account not found.")
             if src.is_archived or dst.is_archived:
                 raise AccountArchivedError("Cannot transfer funds involving archived accounts.")
+            self._validate_person(uow, person_id)
 
             txn = Transaction(
                 id=None,
@@ -396,6 +411,34 @@ class TransactionService:
             uow.commit()
             return self._to_dto(txn, uow)
 
+    @staticmethod
+    def _validate_person(uow: SqlAlchemyUnitOfWork, person_id: int) -> None:
+        """Reject transactions attributed to a person that does not exist."""
+        if not uow.people.get_by_id(person_id):
+            raise EntityNotFoundError(f"Person {person_id} not found.")
+
+    @staticmethod
+    def _validate_category(
+        uow: SqlAlchemyUnitOfWork, category_id: int, expected_type: CategoryType
+    ) -> None:
+        """Ensure the category exists, is active, and matches the transaction type.
+
+        Posting an expense against an income category (or vice versa) would silently
+        corrupt category breakdowns, budget actuals, and reports, so it is rejected.
+        """
+        cat = uow.categories.get_by_id(category_id)
+        if not cat:
+            raise EntityNotFoundError(f"Category {category_id} not found.")
+        if cat.is_archived:
+            raise CategoryArchivedError(
+                f"Category '{cat.name}' is archived and cannot receive new transactions."
+            )
+        if cat.category_type != expected_type:
+            raise IncompatibleCategoryError(
+                f"Category '{cat.name}' is a {cat.category_type.value} category and cannot be "
+                f"used for a {expected_type.value} transaction."
+            )
+
     def void_transaction(self, transaction_id: int) -> None:
         with self._uow as uow:
             txn = uow.transactions.get_by_id(transaction_id)
@@ -416,6 +459,7 @@ class TransactionService:
         status: Optional[TransactionStatus] = None,
         limit: int = 50,
         offset: int = 0,
+        include_voided: bool = True,
     ) -> Tuple[List[TransactionDto], int]:
         with self._uow as uow:
             txns, total = uow.transactions.query_transactions(
@@ -429,6 +473,7 @@ class TransactionService:
                 status=status,
                 limit=limit,
                 offset=offset,
+                include_voided=include_voided,
             )
             return [self._to_dto(t, uow) for t in txns], total
 
@@ -466,6 +511,11 @@ class TransactionService:
             status=t.status.value,
             notes=t.notes,
             affected_accounts=", ".join(affected),
+            created_at=_format_timestamp(t.created_at),
+            updated_at=_format_timestamp(t.updated_at),
+            voided_at=(
+                _format_timestamp(t.updated_at) if t.status == TransactionStatus.VOIDED else ""
+            ),
         )
 
 
@@ -658,6 +708,9 @@ class DebtService:
         account_id: Optional[int] = None,
         notes: Optional[str] = None,
     ) -> DebtDto:
+        if amount.paise <= 0:
+            raise InvalidDebtPaymentError("Repayment amount must be strictly positive.")
+
         payment = DebtPayment(
             id=None,
             debt_id=debt_id,
@@ -670,6 +723,18 @@ class DebtService:
             debt = uow.debts.get_by_id(debt_id)
             if not debt:
                 raise EntityNotFoundError(f"Debt {debt_id} not found.")
+            if debt.is_settled:
+                raise InvalidDebtPaymentError(
+                    f"Debt {debt_id} is already fully settled; no further repayment can be recorded."
+                )
+            if amount.paise > debt.remaining_amount.paise:
+                raise InvalidDebtPaymentError(
+                    "Repayment of "
+                    f"{amount.format()} exceeds the outstanding balance of "
+                    f"{debt.remaining_amount.format()}."
+                )
+            if account_id is not None and not uow.accounts.get_by_id(account_id):
+                raise EntityNotFoundError(f"Account {account_id} not found.")
             uow.debts.add_payment(payment)
             uow.commit()
             updated_debt = uow.debts.get_by_id(debt_id)
@@ -793,9 +858,11 @@ class OverviewService:
                     )
                 )
 
-            # 4. Recent Transactions (last 10)
+            # 4. Recent Transactions (last 10). Deleted records live in the ledger's
+            # History tab only, so they must not resurface on the dashboard.
             recent_txns, _ = uow.transactions.query_transactions(
                 person_id=person_id,
+                status=TransactionStatus.COMPLETED,
                 limit=10,
                 offset=0,
             )

@@ -1,6 +1,6 @@
 """Debt and DebtPayment entities for tracking money lent or borrowed."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
 from enum import Enum
 from typing import Optional
@@ -29,7 +29,7 @@ class DebtPayment:
     payment_date: date
     account_id: Optional[int] = None
     notes: Optional[str] = None
-    created_at: datetime = datetime.now(timezone.utc)
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
     def __post_init__(self) -> None:
         if self.amount.paise <= 0:
@@ -47,8 +47,8 @@ class Debt:
     due_date: Optional[date] = None
     is_settled: bool = False
     notes: Optional[str] = None
-    created_at: datetime = datetime.now(timezone.utc)
-    updated_at: datetime = datetime.now(timezone.utc)
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
     def __post_init__(self) -> None:
         if not self.counterparty_name or not self.counterparty_name.strip():

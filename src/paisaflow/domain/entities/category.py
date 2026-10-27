@@ -1,6 +1,6 @@
 """Category entity for classification of income and expenses."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Optional
@@ -24,8 +24,8 @@ class Category:
     icon_name: str = "tag"
     color_code: str = "#82C9D4"
     is_archived: bool = False
-    created_at: datetime = datetime.now(timezone.utc)
-    updated_at: datetime = datetime.now(timezone.utc)
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
     def __post_init__(self) -> None:
         if not self.name or not self.name.strip():

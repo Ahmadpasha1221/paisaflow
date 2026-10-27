@@ -1,6 +1,6 @@
 """SavingsGoal and GoalContribution entities for tracking asset accumulation targets."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Optional
@@ -15,7 +15,7 @@ class GoalContribution:
     amount: Money
     date: date
     notes: Optional[str] = None
-    created_at: datetime = datetime.now(timezone.utc)
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
     def __post_init__(self) -> None:
         if self.amount.paise <= 0:
@@ -33,8 +33,8 @@ class SavingsGoal:
     linked_account_id: Optional[int] = None
     is_achieved: bool = False
     notes: Optional[str] = None
-    created_at: datetime = datetime.now(timezone.utc)
-    updated_at: datetime = datetime.now(timezone.utc)
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
     def __post_init__(self) -> None:
         if not self.name or not self.name.strip():

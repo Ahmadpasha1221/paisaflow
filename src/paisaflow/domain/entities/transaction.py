@@ -76,7 +76,7 @@ class TransactionEntry:
     account_id: int
     direction: EntryDirection
     amount: Money
-    created_at: datetime = datetime.now(timezone.utc)
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
     def __post_init__(self) -> None:
         if isinstance(self.direction, str):
@@ -110,8 +110,8 @@ class Transaction:
     related_transaction_id: Optional[int] = None
     notes: Optional[str] = None
     entries: List[TransactionEntry] = field(default_factory=list)
-    created_at: datetime = datetime.now(timezone.utc)
-    updated_at: datetime = datetime.now(timezone.utc)
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
     def __post_init__(self) -> None:
         if not self.description or not self.description.strip():
