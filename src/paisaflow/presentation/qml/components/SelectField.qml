@@ -84,7 +84,15 @@ ComboBox {
         height: 36
 
         contentItem: Text {
-            text: model[root.textRoleName] !== undefined ? model[root.textRoleName] : modelData
+            // The option models are plain JS arrays of objects, so the entry lives in
+            // modelData; ListModel models expose the role through model instead.
+            text: {
+                var entry = modelData !== undefined && modelData !== null ? modelData : model;
+                if (entry === undefined || entry === null)
+                    return "";
+                var label = entry[root.textRoleName];
+                return label === undefined || label === null ? "" : label;
+            }
             color: themeEngine.primaryText
             font.pixelSize: 13
             font.family: "Segoe UI, Inter, sans-serif"

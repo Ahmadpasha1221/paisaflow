@@ -132,6 +132,18 @@ ApplicationWindow {
         anchors.fill: parent
     }
 
+    RestoreBackupDialog {
+        id: restoreBackupDialog
+        anchors.fill: parent
+    }
+
+    ConfirmDialog {
+        id: deleteTransactionDialog
+        title: "Delete Transaction"
+
+        onConfirmed: transactionVM.voidTransaction(transactionId)
+    }
+
     // Floating Toast Notification
     ToastNotification {
         id: toast
@@ -170,6 +182,18 @@ ApplicationWindow {
             }
         }
 
+        function onTransactionDeleteRequested(transactionId, description) {
+            deleteTransactionDialog.transactionId = transactionId;
+            deleteTransactionDialog.message = "Delete \"" + description + "\"? It will be removed from the ledger and kept in History for your records. Balances, budgets and reports are recalculated.";
+            deleteTransactionDialog.open = true;
+        }
+
+        function onRestoreRequested(backupPath, backupName) {
+            restoreBackupDialog.backupPath = backupPath;
+            restoreBackupDialog.backupName = backupName;
+            restoreBackupDialog.open = true;
+        }
+
         function onHouseholdContextChanged() {
             overviewVM.setPersonFilter(appVM.selectedPersonId);
             transactionVM.setPersonFilter(appVM.selectedPersonId);
@@ -188,6 +212,38 @@ ApplicationWindow {
             goalVM.refresh();
             debtVM.refresh();
             reportsVM.refresh();
+        }
+    }
+
+    // Transaction actions (delete, failed save) report back through the toast, and every
+    // ledger mutation refreshes the dashboards, budgets and reports in one place.
+    Connections {
+        target: transactionVM
+
+        function onDataChanged() {
+            appVM.notifyDataChanged();
+        }
+
+        function onOperationSuccess(message) {
+            toast.show(message, false);
+        }
+
+        function onOperationError(message) {
+            toast.show(message, true);
+        }
+    }
+
+    // Settings: surface restore errors and refresh the shell after a restore.
+    Connections {
+        target: settingsVM
+
+        function onOperationError(message) {
+            toast.show(message, true);
+        }
+
+        function onDatabaseRestored() {
+            themeEngine.reloadTheme();
+            appVM.notifyDataChanged();
         }
     }
 

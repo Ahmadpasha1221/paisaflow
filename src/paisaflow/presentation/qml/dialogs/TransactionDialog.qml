@@ -235,24 +235,23 @@ ModalDialog {
             }
         }
 
-        Item { width: 1; height: 8 }
+    }
 
-        // Action Buttons
-        Row {
-            width: parent.width
-            spacing: 12
+    // Action buttons stay pinned below the scrolling form.
+    footer: Row {
+        width: parent.width
+        spacing: 12
 
-            SecondaryButton {
-                text: "Cancel"
-                width: (parent.width - 12) / 2
-                onClicked: root.closed()
-            }
+        SecondaryButton {
+            text: "Cancel"
+            width: (parent.width - 12) / 2
+            onClicked: root.closed()
+        }
 
-            PrimaryButton {
-                text: "Save Transaction"
-                width: (parent.width - 12) / 2
-                onClicked: root.submit()
-            }
+        PrimaryButton {
+            text: "Save Transaction"
+            width: (parent.width - 12) / 2
+            onClicked: root.submit()
         }
     }
 
@@ -306,9 +305,9 @@ ModalDialog {
         }
 
         if (success) {
+            // transactionVM.dataChanged already refreshed the rest of the shell.
             amountInput.text = "";
             descInput.text = "";
-            appVM.notifyDataChanged();
             root.closed();
         }
     }

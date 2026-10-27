@@ -55,7 +55,6 @@ Rectangle {
                 iconName: root.collapsed ? "overview" : "arrow-left-right"
                 iconSize: 16
                 anchors.verticalCenter: parent.verticalCenter
-                anchors.right: parent.right
                 onClicked: root.collapsed = !root.collapsed
             }
         }

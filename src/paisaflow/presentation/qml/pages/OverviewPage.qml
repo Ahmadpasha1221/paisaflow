@@ -7,11 +7,11 @@ ScrollView {
 
     contentWidth: availableWidth
     clip: true
+    padding: 24
 
     Column {
         width: parent.width
         spacing: 24
-        padding: 24
 
         // Page Header
         PageHeader {
@@ -165,10 +165,7 @@ ScrollView {
                                 categoryName: modelData.categoryName
                                 paymentMethod: modelData.paymentMethod
                                 status: modelData.status
-                                onVoidRequested: (id) => {
-                                    transactionVM.voidTransaction(id);
-                                    appVM.notifyDataChanged();
-                                }
+                                onVoidRequested: (id) => appVM.requestTransactionDelete(id, modelData.description)
                             }
                         }
                     }
@@ -210,61 +207,10 @@ ScrollView {
                             visible: overviewVM.categorySpending.length === 0
                         }
 
-                        Repeater {
-                            model: overviewVM.categorySpending
-
-                            Column {
-                                width: parent.width
-                                spacing: 4
-
-                                Row {
-                                    width: parent.width
-
-                                    Rectangle {
-                                        width: 10
-                                        height: 10
-                                        radius: 5
-                                        color: modelData.colorCode
-                                        anchors.verticalCenter: parent.verticalCenter
-                                    }
-
-                                    Item { width: 8; height: 1 }
-
-                                    Text {
-                                        text: modelData.categoryName
-                                        color: themeEngine.primaryText
-                                        font.pixelSize: 13
-                                        font.weight: Font.Medium
-                                        width: parent.width - amtText.width - 20
-                                        elide: Text.ElideRight
-                                        anchors.verticalCenter: parent.verticalCenter
-                                    }
-
-                                    Text {
-                                        id: amtText
-                                        text: modelData.amount + " (" + modelData.percentage.toFixed(1) + "%)"
-                                        color: themeEngine.secondaryText
-                                        font.pixelSize: 12
-                                        font.features: { "tnum": 1 }
-                                        anchors.verticalCenter: parent.verticalCenter
-                                    }
-                                }
-
-                                // Mini Progress Bar
-                                Rectangle {
-                                    width: parent.width
-                                    height: 5
-                                    radius: 2.5
-                                    color: themeEngine.elevatedSurface
-
-                                    Rectangle {
-                                        width: Math.min(parent.width, parent.width * (modelData.percentage / 100.0))
-                                        height: parent.height
-                                        radius: 2.5
-                                        color: modelData.colorCode
-                                    }
-                                }
-                            }
+                        RankedBarList {
+                            width: parent.width
+                            items: overviewVM.categorySpending
+                            maxRows: 6
                         }
                     }
                 }

@@ -6,6 +6,7 @@ from pathlib import Path
 
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtQml import QQmlApplicationEngine
+from PySide6.QtQuickControls2 import QQuickStyle
 
 from paisaflow.application.services import AccountService, PersonService
 from paisaflow.domain.entities.account import AccountType
@@ -24,6 +25,11 @@ from paisaflow.presentation.viewmodels.reports_viewmodel import ReportsViewModel
 from paisaflow.presentation.viewmodels.settings_viewmodel import SettingsViewModel
 from paisaflow.presentation.viewmodels.theme_engine import ThemeEngine
 from paisaflow.presentation.viewmodels.transaction_viewmodel import TransactionViewModel
+
+# The UI restyles every Qt Quick Control (buttons, combo boxes, popups). The native "Windows"
+# style silently ignores those customizations, which leaves dropdown lists empty and controls
+# unstyled, so pin the fully themeable Basic style before any QML imports Qt Quick Controls.
+QQuickStyle.setStyle("Basic")
 
 
 def ensure_initial_seed(uow: SqlAlchemyUnitOfWork) -> None:
@@ -99,4 +105,12 @@ def run_app() -> int:
         print(f"Failed to load QML from {qml_path}", file=sys.stderr)
         return -1
 
-    return app.exec()
+    exit_code = app.exec()
+
+    # Tear the QML scene down explicitly while the view models are still referenced.
+    # If the engine is instead destroyed during interpreter shutdown, Qt re-evaluates
+    # every binding against an already-released context and floods stderr with hundreds
+    # of "Cannot read property '...' of null" warnings.
+    del qml_engine
+
+    return exit_code

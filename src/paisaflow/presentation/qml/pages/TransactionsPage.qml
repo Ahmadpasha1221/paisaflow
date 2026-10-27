@@ -7,11 +7,11 @@ ScrollView {
 
     contentWidth: availableWidth
     clip: true
+    padding: 24
 
     Column {
         width: parent.width
         spacing: 20
-        padding: 24
 
         // Header with global add action
         PageHeader {
@@ -89,6 +89,80 @@ ScrollView {
             }
         }
 
+        // Ledger views: live records versus deleted records kept for audit
+        Row {
+            id: ledgerTabs
+            objectName: "ledgerTabs"
+            width: parent.width
+            spacing: 8
+
+            Repeater {
+                model: [
+                    { mode: "active", label: "Active" },
+                    { mode: "history", label: "History" }
+                ]
+
+                Rectangle {
+                    id: ledgerTab
+                    objectName: "ledgerTab_" + modelData.mode
+                    readonly property bool selected: transactionVM.viewMode === modelData.mode
+                    readonly property int count: modelData.mode === "history" ? transactionVM.historyCount : transactionVM.activeCount
+
+                    width: tabRow.implicitWidth + 26
+                    height: 36
+                    radius: 8
+                    color: selected ? themeEngine.elevatedSurface : "transparent"
+                    border.color: selected ? themeEngine.primaryAccent : themeEngine.divider
+                    border.width: 1
+
+                    Behavior on color {
+                        ColorAnimation { duration: 120 }
+                    }
+
+                    Row {
+                        id: tabRow
+                        anchors.centerIn: parent
+                        spacing: 8
+
+                        Text {
+                            text: modelData.label
+                            color: ledgerTab.selected ? themeEngine.primaryText : themeEngine.secondaryText
+                            font.pixelSize: 13
+                            font.weight: ledgerTab.selected ? Font.DemiBold : Font.Medium
+                            font.family: "Segoe UI, Inter, sans-serif"
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
+
+                        Rectangle {
+                            width: countLabel.implicitWidth + 12
+                            height: 20
+                            radius: 10
+                            color: ledgerTab.selected
+                                   ? Qt.rgba(themeEngine.primaryAccent.r, themeEngine.primaryAccent.g, themeEngine.primaryAccent.b, 0.18)
+                                   : themeEngine.elevatedSurface
+                            anchors.verticalCenter: parent.verticalCenter
+
+                            Text {
+                                id: countLabel
+                                text: ledgerTab.count
+                                color: ledgerTab.selected ? themeEngine.primaryAccent : themeEngine.secondaryText
+                                font.pixelSize: 11
+                                font.weight: Font.DemiBold
+                                font.features: { "tnum": 1 }
+                                anchors.centerIn: parent
+                            }
+                        }
+                    }
+
+                    MouseArea {
+                        anchors.fill: parent
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: transactionVM.setViewMode(modelData.mode)
+                    }
+                }
+            }
+        }
+
         // Ledger List Container
         Rectangle {
             width: parent.width
@@ -104,22 +178,21 @@ ScrollView {
                 anchors.margins: 18
                 spacing: 12
 
-                // Column Headers
+                // Column Headers (same column widths as TransactionRow)
                 Row {
-                    width: parent.width
+                    width: parent.width - 32
+                    x: 16
                     height: 24
-                    anchors.leftMargin: 16
-                    anchors.rightMargin: 16
+                    spacing: 14
 
                     Item { width: 34; height: 1 } // icon spacer
-                    Item { width: 14; height: 1 }
 
                     Text {
                         text: "DESCRIPTION & DETAILS"
                         color: themeEngine.secondaryText
                         font.pixelSize: 11
                         font.weight: Font.DemiBold
-                        width: parent.width - 34 - 180 - 130 - 32
+                        width: parent.width - 34 - 80 - 100 - 32 - 4 * 14
                     }
 
                     Text {
@@ -148,12 +221,14 @@ ScrollView {
                     color: themeEngine.divider
                 }
 
-                // Empty state if no transactions
+                // Empty state
                 EmptyState {
                     visible: transactionVM.transactions.length === 0
-                    title: "No transactions found"
-                    description: "No records match your selected filters or search query."
-                    actionText: "Clear Filters"
+                    title: transactionVM.viewMode === "history" ? "History is empty" : "No transactions found"
+                    description: transactionVM.viewMode === "history"
+                                 ? "Deleted transactions are kept here for audit. They no longer count towards balances, budgets or reports."
+                                 : "No records match your selected filters or search query."
+                    actionText: transactionVM.viewMode === "history" ? "" : "Clear Filters"
                     onActionTriggered: {
                         searchBox.text = "";
                         transactionVM.setSearchText("");
@@ -176,10 +251,9 @@ ScrollView {
                         categoryName: modelData.categoryName
                         paymentMethod: modelData.paymentMethod
                         status: modelData.status
-                        onVoidRequested: (id) => {
-                            transactionVM.voidTransaction(id);
-                            appVM.notifyDataChanged();
-                        }
+                        showDeleteAction: transactionVM.viewMode === "active"
+                        statusNote: transactionVM.viewMode === "history" ? "Deleted " + modelData.voidedAt : ""
+                        onVoidRequested: (id) => appVM.requestTransactionDelete(id, modelData.description)
                     }
                 }
 
@@ -190,7 +264,8 @@ ScrollView {
                     visible: transactionVM.totalCount > 0
 
                     Text {
-                        text: "Showing " + transactionVM.transactions.length + " of " + transactionVM.totalCount + " transactions"
+                        text: "Showing " + transactionVM.transactions.length + " of " + transactionVM.totalCount
+                              + (transactionVM.viewMode === "history" ? " deleted transactions" : " transactions")
                         color: themeEngine.secondaryText
                         font.pixelSize: 12
                         anchors.left: parent.left

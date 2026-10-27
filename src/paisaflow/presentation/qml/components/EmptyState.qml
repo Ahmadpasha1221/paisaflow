@@ -11,7 +11,8 @@ Column {
 
     width: parent.width
     spacing: 14
-    anchors.centerIn: parent
+    topPadding: 32
+    bottomPadding: 32
 
     Rectangle {
         width: 64

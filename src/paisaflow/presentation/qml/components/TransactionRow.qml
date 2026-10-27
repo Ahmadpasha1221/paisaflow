@@ -14,24 +14,30 @@ Rectangle {
     property string paymentMethod: ""
     property string status: "completed"
     property bool isVoided: status === "voided"
+    // Active rows offer the delete affordance; rows in the History tab do not.
+    property bool showDeleteAction: true
+    // Extra detail appended to the subtitle, e.g. when the record was deleted.
+    property string statusNote: ""
 
     signal voidRequested(int id)
 
     implicitHeight: 56
     implicitWidth: parent ? parent.width : 600
     radius: 8
-    color: mouseArea.containsMouse ? themeEngine.elevatedSurface : "transparent"
+    color: rowHover.hovered ? themeEngine.elevatedSurface : "transparent"
     border.color: themeEngine.divider
     border.width: 1
 
     Behavior on color {
-        ColorAnimation { duration: 100 }
+        ColorAnimation { duration: 120 }
     }
 
-    MouseArea {
-        id: mouseArea
-        anchors.fill: parent
-        hoverEnabled: true
+    // A HoverHandler observes the pointer passively, including while it sits on the
+    // child delete button. The previous MouseArea lost hover as soon as the button
+    // appeared underneath the cursor, so the button hid itself, the row regained
+    // hover, and both blinked in a loop.
+    HoverHandler {
+        id: rowHover
     }
 
     Row {
@@ -72,7 +78,7 @@ Rectangle {
 
         // Details (Description & Category/Person)
         Column {
-            width: parent.width - 34 - 180 - (root.isVoided ? 90 : 130)
+            width: Math.max(0, parent.width - 34 - 80 - 100 - 32 - 4 * 14)
             anchors.verticalCenter: parent.verticalCenter
             spacing: 2
 
@@ -88,7 +94,9 @@ Rectangle {
             }
 
             Text {
-                text: (root.categoryName !== "" ? root.categoryName + " • " : "") + root.personName + " • " + root.paymentMethod
+                text: (root.categoryName !== "" ? root.categoryName + " • " : "")
+                      + root.personName + " • " + root.paymentMethod
+                      + (root.statusNote !== "" ? " • " + root.statusNote : "")
                 color: themeEngine.secondaryText
                 font.pixelSize: 12
                 font.family: "Segoe UI, Inter, sans-serif"
@@ -127,25 +135,26 @@ Rectangle {
             width: 100
         }
 
-        // Action / Status
+        // Delete action, revealed while the row is hovered.
         Item {
             width: 32
             height: 32
             anchors.verticalCenter: parent.verticalCenter
 
-            StatusBadge {
-                text: "VOID"
-                level: "neutral"
-                visible: root.isVoided
-                anchors.centerIn: parent
-            }
-
             IconButton {
-                iconName: "close"
+                id: deleteButton
+                objectName: "deleteTransactionButton"
+                iconName: "trash"
                 iconSize: 14
-                visible: !root.isVoided && mouseArea.containsMouse
                 anchors.centerIn: parent
+                visible: root.showDeleteAction && (rowHover.hovered || opacity > 0)
+                opacity: rowHover.hovered ? 1 : 0
+                enabled: rowHover.hovered
                 onClicked: root.voidRequested(root.transactionId)
+
+                Behavior on opacity {
+                    NumberAnimation { duration: 120; easing.type: Easing.OutQuad }
+                }
             }
         }
     }

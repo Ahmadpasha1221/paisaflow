@@ -7,18 +7,65 @@ ScrollView {
 
     contentWidth: availableWidth
     clip: true
+    padding: 24
 
     Column {
         width: parent.width
         spacing: 24
-        padding: 24
 
         PageHeader {
             title: "Financial Reports & Trends"
             subtitle: "Historical monthly income versus expenses and lifetime category expenditure."
         }
 
-        // Monthly Comparison Trend Table
+        // Monthly income vs expenses chart
+        Rectangle {
+            width: parent.width
+            implicitHeight: chartCol.implicitHeight + 36
+            radius: 12
+            color: themeEngine.primarySurface
+            border.color: themeEngine.divider
+            border.width: 1
+
+            Column {
+                id: chartCol
+                anchors.fill: parent
+                anchors.margins: 18
+                spacing: 14
+
+                Text {
+                    text: "Monthly Cash Flow (Last 6 Months)"
+                    color: themeEngine.primaryText
+                    font.pixelSize: 16
+                    font.weight: Font.DemiBold
+                    font.family: "Segoe UI, Inter, sans-serif"
+                }
+
+                Rectangle {
+                    width: parent.width
+                    height: 1
+                    color: themeEngine.divider
+                }
+
+                GroupedBarChart {
+                    objectName: "monthlyBarChart"
+                    width: parent.width
+                    plotHeight: 190
+                    bars: reportsVM.monthlyTrends
+                    visible: reportsVM.monthlyTrends.length > 0
+                }
+
+                Text {
+                    text: "No monthly activity recorded yet."
+                    color: themeEngine.secondaryText
+                    font.pixelSize: 13
+                    font.family: "Segoe UI, Inter, sans-serif"
+                    visible: reportsVM.monthlyTrends.length === 0
+                }
+            }
+        }
+
+        // Monthly comparison figures
         Rectangle {
             width: parent.width
             implicitHeight: trendCol.implicitHeight + 36
@@ -143,95 +190,109 @@ ScrollView {
             }
         }
 
-        // Lifetime Category Breakdown
-        Rectangle {
+        // Lifetime category and per-person breakdowns
+        Row {
             width: parent.width
-            implicitHeight: catCol.implicitHeight + 36
-            radius: 12
-            color: themeEngine.primarySurface
-            border.color: themeEngine.divider
-            border.width: 1
+            spacing: 20
 
-            Column {
-                id: catCol
-                anchors.fill: parent
-                anchors.margins: 18
-                spacing: 14
+            Rectangle {
+                width: (parent.width - 20) / 2
+                implicitHeight: catCol.implicitHeight + 36
+                radius: 12
+                color: themeEngine.primarySurface
+                border.color: themeEngine.divider
+                border.width: 1
 
-                Text {
-                    text: "Category Expense Distribution"
-                    color: themeEngine.primaryText
-                    font.pixelSize: 16
-                    font.weight: Font.DemiBold
-                    font.family: "Segoe UI, Inter, sans-serif"
-                }
+                Column {
+                    id: catCol
+                    anchors.fill: parent
+                    anchors.margins: 18
+                    spacing: 14
 
-                Rectangle {
-                    width: parent.width
-                    height: 1
-                    color: themeEngine.divider
-                }
+                    Text {
+                        text: "Category Expense Distribution"
+                        color: themeEngine.primaryText
+                        font.pixelSize: 16
+                        font.weight: Font.DemiBold
+                        font.family: "Segoe UI, Inter, sans-serif"
+                    }
 
-                Text {
-                    text: "No expenses recorded to calculate distribution."
-                    color: themeEngine.secondaryText
-                    font.pixelSize: 13
-                    visible: reportsVM.categoryShares.length === 0
-                }
+                    Text {
+                        text: "Lifetime total " + reportsVM.totalExpenses
+                        color: themeEngine.secondaryText
+                        font.pixelSize: 12
+                        font.family: "Segoe UI, Inter, sans-serif"
+                    }
 
-                Repeater {
-                    model: reportsVM.categoryShares
-
-                    Column {
+                    Rectangle {
                         width: parent.width
-                        spacing: 4
+                        height: 1
+                        color: themeEngine.divider
+                    }
 
-                        Row {
-                            width: parent.width
+                    Text {
+                        text: "No expenses recorded to calculate distribution."
+                        color: themeEngine.secondaryText
+                        font.pixelSize: 13
+                        font.family: "Segoe UI, Inter, sans-serif"
+                        visible: reportsVM.categoryShares.length === 0
+                    }
 
-                            Rectangle {
-                                width: 10
-                                height: 10
-                                radius: 5
-                                color: modelData.color
-                                anchors.verticalCenter: parent.verticalCenter
-                            }
+                    RankedBarList {
+                        objectName: "categorySpendingChart"
+                        width: parent.width
+                        items: reportsVM.categoryShares
+                    }
+                }
+            }
 
-                            Item { width: 8; height: 1 }
+            Rectangle {
+                width: (parent.width - 20) / 2
+                implicitHeight: peopleCol.implicitHeight + 36
+                radius: 12
+                color: themeEngine.primarySurface
+                border.color: themeEngine.divider
+                border.width: 1
 
-                            Text {
-                                text: modelData.category
-                                color: themeEngine.primaryText
-                                font.pixelSize: 13
-                                font.weight: Font.Medium
-                                width: parent.width - shareText.width - 20
-                                elide: Text.ElideRight
-                                anchors.verticalCenter: parent.verticalCenter
-                            }
+                Column {
+                    id: peopleCol
+                    anchors.fill: parent
+                    anchors.margins: 18
+                    spacing: 14
 
-                            Text {
-                                id: shareText
-                                text: modelData.amount + " (" + modelData.percentage.toFixed(1) + "%)"
-                                color: themeEngine.secondaryText
-                                font.pixelSize: 12
-                                font.features: { "tnum": 1 }
-                                anchors.verticalCenter: parent.verticalCenter
-                            }
-                        }
+                    Text {
+                        text: "Spending by Person"
+                        color: themeEngine.primaryText
+                        font.pixelSize: 16
+                        font.weight: Font.DemiBold
+                        font.family: "Segoe UI, Inter, sans-serif"
+                    }
 
-                        Rectangle {
-                            width: parent.width
-                            height: 6
-                            radius: 3
-                            color: themeEngine.elevatedSurface
+                    Text {
+                        text: "How much each household member has used"
+                        color: themeEngine.secondaryText
+                        font.pixelSize: 12
+                        font.family: "Segoe UI, Inter, sans-serif"
+                    }
 
-                            Rectangle {
-                                width: Math.min(parent.width, parent.width * (modelData.percentage / 100.0))
-                                height: parent.height
-                                radius: 3
-                                color: modelData.color
-                            }
-                        }
+                    Rectangle {
+                        width: parent.width
+                        height: 1
+                        color: themeEngine.divider
+                    }
+
+                    Text {
+                        text: "No member spending recorded yet."
+                        color: themeEngine.secondaryText
+                        font.pixelSize: 13
+                        font.family: "Segoe UI, Inter, sans-serif"
+                        visible: reportsVM.personSpending.length === 0
+                    }
+
+                    RankedBarList {
+                        objectName: "personSpendingChart"
+                        width: parent.width
+                        items: reportsVM.personSpending
                     }
                 }
             }

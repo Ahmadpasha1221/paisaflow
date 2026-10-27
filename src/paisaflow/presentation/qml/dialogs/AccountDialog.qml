@@ -69,23 +69,22 @@ ModalDialog {
             }
         }
 
-        Item { width: 1; height: 8 }
+    }
 
-        Row {
-            width: parent.width
-            spacing: 12
+    footer: Row {
+        width: parent.width
+        spacing: 12
 
-            SecondaryButton {
-                text: "Cancel"
-                width: (parent.width - 12) / 2
-                onClicked: root.closed()
-            }
+        SecondaryButton {
+            text: "Cancel"
+            width: (parent.width - 12) / 2
+            onClicked: root.closed()
+        }
 
-            PrimaryButton {
-                text: "Create Account"
-                width: (parent.width - 12) / 2
-                onClicked: root.submit()
-            }
+        PrimaryButton {
+            text: "Create Account"
+            width: (parent.width - 12) / 2
+            onClicked: root.submit()
         }
     }
 

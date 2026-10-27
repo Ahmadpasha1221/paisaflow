@@ -7,11 +7,11 @@ ScrollView {
 
     contentWidth: availableWidth
     clip: true
+    padding: 24
 
     Column {
         width: parent.width
         spacing: 20
-        padding: 24
 
         PageHeader {
             title: "Debts & Loans"

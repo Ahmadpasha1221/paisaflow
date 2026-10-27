@@ -8,11 +8,11 @@ ScrollView {
 
     contentWidth: availableWidth
     clip: true
+    padding: 24
 
     Column {
         width: parent.width
         spacing: 24
-        padding: 24
 
         PageHeader {
             title: "Settings & System Management"
@@ -253,6 +253,92 @@ ScrollView {
                             if (path) {
                                 appVM.showToast("Exported to CSV successfully.");
                             }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Restore from Backup
+        Rectangle {
+            width: parent.width
+            implicitHeight: restoreCol.implicitHeight + 36
+            radius: 12
+            color: themeEngine.primarySurface
+            border.color: themeEngine.divider
+            border.width: 1
+
+            Column {
+                id: restoreCol
+                anchors.fill: parent
+                anchors.margins: 18
+                spacing: 12
+
+                Text {
+                    text: "Restore from Backup"
+                    color: themeEngine.primaryText
+                    font.pixelSize: 16
+                    font.weight: Font.DemiBold
+                    font.family: "Segoe UI, Inter, sans-serif"
+                }
+
+                Text {
+                    text: "Restoring replaces all current records with the selected backup. A safety copy of your current database is always kept first."
+                    color: themeEngine.secondaryText
+                    font.pixelSize: 12
+                    font.family: "Segoe UI, Inter, sans-serif"
+                    wrapMode: Text.WordWrap
+                    width: parent.width
+                }
+
+                Rectangle {
+                    width: parent.width
+                    height: 1
+                    color: themeEngine.divider
+                }
+
+                Text {
+                    visible: settingsVM.backups.length === 0
+                    text: "No backups found yet. Create a backup first."
+                    color: themeEngine.secondaryText
+                    font.pixelSize: 13
+                    font.family: "Segoe UI, Inter, sans-serif"
+                }
+
+                Repeater {
+                    model: settingsVM.backups
+
+                    delegate: Row {
+                        width: parent.width
+                        spacing: 12
+
+                        Column {
+                            width: parent.width - restoreAction.width - 12
+                            spacing: 2
+                            anchors.verticalCenter: parent.verticalCenter
+
+                            Text {
+                                text: modelData.name
+                                color: themeEngine.primaryText
+                                font.pixelSize: 13
+                                font.family: "Consolas, monospace"
+                                elide: Text.ElideMiddle
+                                width: parent.width
+                            }
+
+                            Text {
+                                text: modelData.modified + "  •  " + modelData.sizeText
+                                color: themeEngine.secondaryText
+                                font.pixelSize: 12
+                            }
+                        }
+
+                        DestructiveButton {
+                            id: restoreAction
+                            text: "Restore"
+                            iconName: "warning"
+                            anchors.verticalCenter: parent.verticalCenter
+                            onClicked: appVM.requestRestore(modelData.path, modelData.name)
                         }
                     }
                 }

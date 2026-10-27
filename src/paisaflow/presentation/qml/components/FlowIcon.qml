@@ -216,6 +216,24 @@ Item {
                     ctx.stroke();
                     break;
 
+                case "trash":
+                case "delete":
+                    // Waste bin: lid, handle and body
+                    ctx.beginPath();
+                    ctx.moveTo(w * 0.22, h * 0.3); ctx.lineTo(w * 0.78, h * 0.3);
+                    ctx.stroke();
+                    ctx.beginPath();
+                    ctx.moveTo(w * 0.4, h * 0.3); ctx.lineTo(w * 0.43, h * 0.18);
+                    ctx.lineTo(w * 0.57, h * 0.18); ctx.lineTo(w * 0.6, h * 0.3);
+                    ctx.stroke();
+                    ctx.beginPath();
+                    ctx.moveTo(w * 0.31, h * 0.3); ctx.lineTo(w * 0.35, h * 0.82);
+                    ctx.lineTo(w * 0.65, h * 0.82); ctx.lineTo(w * 0.69, h * 0.3);
+                    ctx.moveTo(w * 0.44, h * 0.42); ctx.lineTo(w * 0.45, h * 0.7);
+                    ctx.moveTo(w * 0.56, h * 0.42); ctx.lineTo(w * 0.55, h * 0.7);
+                    ctx.stroke();
+                    break;
+
                 case "check":
                     ctx.beginPath();
                     ctx.moveTo(w * 0.2, h * 0.52); ctx.lineTo(w * 0.42, h * 0.74); ctx.lineTo(w * 0.82, h * 0.28);
