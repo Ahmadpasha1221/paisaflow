@@ -1,5 +1,6 @@
 """Integration tests for CSV transaction export."""
 
+import csv
 from datetime import date
 from pathlib import Path
 
@@ -54,3 +55,46 @@ def test_export_transactions_csv(tmp_path: Path):
     assert "Deepak" in content
     assert "Food and Dining" in content
     assert "Celebration dinner" in content
+
+
+def test_export_neutralises_spreadsheet_formula_injection(tmp_path: Path):
+    """User-controlled text must not become an executable formula in the spreadsheet."""
+    db_file = tmp_path / "csv_injection.db"
+    engine = create_db_engine(db_path=db_file)
+    initialize_database(engine)
+    uow = SqlAlchemyUnitOfWork(create_session_factory(engine))
+
+    person = PersonService(uow).create_person(name="=cmd|'/c calc'!A1")
+    acct = AccountService(uow).create_account(
+        name="Wallet",
+        account_type=AccountType.CASH,
+        owner_person_id=person.id,
+        opening_balance=Money(500000),
+    )
+    with uow:
+        cat = next(c for c in uow.categories.get_all() if c.name == "Other Expenses")
+
+    TransactionService(uow).record_expense(
+        transaction_date=date(2026, 10, 25),
+        description='+HYPERLINK("http://evil.example")',
+        amount=Money(10000),
+        account_id=acct.id,
+        person_id=person.id,
+        category_id=cat.id,
+        notes="@SUM(1+1)",
+    )
+
+    export_file = tmp_path / "injection_export.csv"
+    CsvExportService(uow).export_transactions(export_file)
+
+    rows = list(csv.reader(export_file.read_text(encoding="utf-8").splitlines()))
+    headers, row = rows[0], rows[1]
+    cells = dict(zip(headers, row, strict=True))
+
+    # Every user-controlled text cell is prefixed so spreadsheets treat it as text.
+    assert cells["Description"] == '\'+HYPERLINK("http://evil.example")'
+    assert cells["Notes"] == "'@SUM(1+1)"
+    assert cells["Person"] == "'=cmd|'/c calc'!A1"
+    # Generated values keep their exact representation, unsanitised.
+    assert cells["Amount (INR)"] == "100.00"
+    assert cells["Category"] == "Other Expenses"

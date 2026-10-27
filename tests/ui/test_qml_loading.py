@@ -1,11 +1,16 @@
 """UI and QML integration tests verifying QML loading and component bindings."""
 
 import os
+from datetime import date
 from pathlib import Path
 
 import pytest
+import shiboken6
+from PySide6.QtCore import QPoint, Qt
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtQml import QQmlApplicationEngine
+from PySide6.QtQuick import QQuickItem, QQuickWindow
+from PySide6.QtTest import QTest
 
 from paisaflow.bootstrap import ensure_initial_seed
 from paisaflow.infrastructure.database.engine import create_db_engine, create_session_factory
@@ -80,6 +85,184 @@ def test_qml_app_loads_cleanly(qapp, tmp_path: Path):
     window = root_objects[0]
     assert window.property("title").startswith("PaisaFlow")
 
+    # The window colour is bound to themeEngine.appBackground. If the QML view-model
+    # context were not resolved, the binding would evaluate to null instead of a colour.
+    window_color = window.property("color")
+    assert window_color is not None and window_color.isValid()
+    assert window_color.name() == theme_engine.appBackground.lower()
+
+
+def _load_shell(tmp_path: Path):
+    """Build the view models, load App.qml and return the live shell pieces."""
+    db_file = tmp_path / "shell_test.db"
+    engine = create_db_engine(db_path=db_file)
+    initialize_database(engine)
+    uow = SqlAlchemyUnitOfWork(create_session_factory(engine))
+    ensure_initial_seed(uow)
+
+    viewmodels = {
+        "themeEngine": ThemeEngine(uow),
+        "appVM": AppViewModel(uow),
+        "overviewVM": OverviewViewModel(uow),
+        "transactionVM": TransactionViewModel(uow),
+        "accountVM": AccountViewModel(uow),
+        "personVM": PersonViewModel(uow),
+        "budgetVM": BudgetViewModel(uow),
+        "goalVM": GoalViewModel(uow),
+        "debtVM": DebtViewModel(uow),
+        "reportsVM": ReportsViewModel(uow),
+        "settingsVM": SettingsViewModel(uow, engine),
+    }
+
+    qml_engine = QQmlApplicationEngine()
+    for name, vm in viewmodels.items():
+        qml_engine.rootContext().setContextProperty(name, vm)
+
+    qml_engine.load(str(Path("src/paisaflow/presentation/qml/App.qml").resolve()))
+    root_objects = qml_engine.rootObjects()
+    assert root_objects, "Failed to load App.qml root window"
+    window = shiboken6.wrapInstance(shiboken6.getCppPointer(root_objects[0])[0], QQuickWindow)
+    return qml_engine, window, viewmodels
+
+
+def _walk(item: QQuickItem):
+    yield item
+    for child in item.childItems():
+        yield from _walk(child)
+
+
+def _find_dialog(window: QQuickWindow, qml_type: str) -> QQuickItem:
+    return next(
+        item
+        for item in _walk(window.contentItem())
+        if item.metaObject().className().startswith(qml_type)
+    )
+
+
+def _find_button(dialog: QQuickItem, label: str) -> QQuickItem:
+    return next(item for item in _walk(dialog) if item.property("text") == label)
+
+
+def _scene_centre(item: QQuickItem) -> QPoint:
+    centre = item.mapToScene(item.boundingRect().center())
+    return QPoint(int(centre.x()), int(centre.y()))
+
+
+def test_mutating_slots_return_their_value_to_qml(tmp_path: Path):
+    """Every dialog branches on the slot result, so the slot must declare a return type.
+
+    Without ``result=...`` in the @Slot decorator QML receives ``undefined`` and a
+    successful save is treated as a failure, leaving the dialog stuck open.
+    """
+    _, _, viewmodels = _load_shell(tmp_path)
+
+    value_returning_slots = {
+        "transactionVM": {
+            "addIncome": "bool",
+            "addExpense": "bool",
+            "addTransfer": "bool",
+            "voidTransaction": "bool",
+        },
+        "accountVM": {"createAccount": "bool", "archiveAccount": "bool"},
+        "budgetVM": {"createBudget": "bool"},
+        "debtVM": {"recordDebt": "bool", "recordPayment": "bool"},
+        "goalVM": {"createGoal": "bool", "contribute": "bool"},
+        "personVM": {"createPerson": "bool", "updatePerson": "bool"},
+        "settingsVM": {
+            "createBackup": "str",
+            "restoreBackup": "bool",
+            "exportTransactionsCsv": "str",
+        },
+    }
+
+    for vm_name, methods in value_returning_slots.items():
+        meta = viewmodels[vm_name].metaObject()
+        for method_name, expected in methods.items():
+            matches = [
+                meta.method(index)
+                for index in range(meta.methodCount())
+                if meta.method(index).name() == method_name
+            ]
+            assert matches, f"{vm_name}.{method_name} is not exposed to QML"
+            return_type = matches[0].returnMetaType().name()
+            if isinstance(return_type, bytes):
+                return_type = return_type.decode()
+            accepted = {"bool": {"bool"}, "str": {"qstring", "str"}}[expected]
+            assert return_type.lower() in accepted, (
+                f"{vm_name}.{method_name} returns {return_type!r} to QML, expected {expected!r}"
+            )
+
+
+def test_transaction_dialog_actions_stay_on_screen_and_close(qapp, tmp_path: Path):
+    """The dialog must fit the smallest supported window and close from its own buttons."""
+    qml_engine, window, viewmodels = _load_shell(tmp_path)
+    window.resize(960, 600)  # minimumHeight/minimumWidth declared in App.qml
+    QTest.qWait(200)
+
+    viewmodels["appVM"].openDialog("transaction")
+    QTest.qWait(300)
+
+    dialog = _find_dialog(window, "TransactionDialog")
+    assert dialog.property("open") is True
+
+    for label in ("Save Transaction", "Cancel"):
+        centre = _scene_centre(_find_button(dialog, label))
+        assert 0 <= centre.x() <= window.width(), f"{label} is outside the window horizontally"
+        assert 0 <= centre.y() <= window.height(), f"{label} is below the window viewport"
+
+    QTest.mouseClick(
+        window, Qt.LeftButton, Qt.NoModifier, _scene_centre(_find_button(dialog, "Cancel"))
+    )
+    QTest.qWait(300)
+    assert dialog.property("open") is False, "Cancel did not close the dialog"
+
+    # The header close button must work too.
+    viewmodels["appVM"].openDialog("transaction")
+    QTest.qWait(300)
+    close_button = next(
+        item
+        for item in _walk(dialog)
+        if item.metaObject().className().startswith("IconButton")
+        and item.property("iconName") == "close"
+        and item.isVisible()
+    )
+    QTest.mouseClick(window, Qt.LeftButton, Qt.NoModifier, _scene_centre(close_button))
+    QTest.qWait(300)
+    assert dialog.property("open") is False, "The header close button did not close the dialog"
+
+    del qml_engine
+
+
+def test_transaction_dialog_dropdown_lists_options(qapp, tmp_path: Path):
+    """Combo box rows must render their labels, not blank entries."""
+    qml_engine, window, viewmodels = _load_shell(tmp_path)
+    window.resize(1200, 750)
+    QTest.qWait(200)
+
+    viewmodels["appVM"].openDialog("transaction")
+    QTest.qWait(300)
+    dialog = _find_dialog(window, "TransactionDialog")
+    category_combo = next(
+        item
+        for item in _walk(dialog)
+        if item.metaObject().className().startswith("SelectField")
+        and item.property("count") == len(viewmodels["transactionVM"].expenseCategoryOptions)
+    )
+
+    QTest.mouseClick(window, Qt.LeftButton, Qt.NoModifier, _scene_centre(category_combo))
+    QTest.qWait(400)
+
+    expected = {option["name"] for option in viewmodels["transactionVM"].expenseCategoryOptions}
+    visible_labels = {
+        item.property("text")
+        for item in _walk(window.contentItem())
+        if item.property("text") in expected and item.isVisible()
+    }
+    assert len(visible_labels) >= 5, f"Dropdown rows rendered no labels, saw: {visible_labels}"
+    assert "Groceries" in visible_labels
+
+    del qml_engine
+
 
 def test_theme_toggle_signal(tmp_path: Path):
     db_file = tmp_path / "theme_test.db"
@@ -101,6 +284,133 @@ def test_theme_toggle_signal(tmp_path: Path):
     theme_engine.toggleTheme()
     assert theme_engine.isDark is True
     assert theme_engine.appBackground == "#17251F"
+
+
+def _find_object(window: QQuickWindow, object_name: str) -> QQuickItem:
+    return next(item for item in _walk(window.contentItem()) if item.objectName() == object_name)
+
+
+def _seed_expense(viewmodels, description: str, amount: str) -> int:
+    app_vm = viewmodels["appVM"]
+    txn_vm = viewmodels["transactionVM"]
+    success = txn_vm.addExpense(
+        date.today().isoformat(),
+        description,
+        amount,
+        txn_vm.accountOptions[0]["id"],
+        app_vm.people[0]["id"],
+        txn_vm.expenseCategoryOptions[0]["id"],
+        "cash",
+        "",
+    )
+    assert success is True
+    return next(t["id"] for t in txn_vm.transactions if t["description"] == description)
+
+
+def test_delete_flow_keeps_the_record_in_the_history_tab(qapp, tmp_path: Path):
+    """Deleting from the ledger must confirm first, then move the row to History."""
+    qml_engine, window, viewmodels = _load_shell(tmp_path)
+    window.resize(1200, 750)
+    QTest.qWait(200)
+
+    app_vm = viewmodels["appVM"]
+    txn_vm = viewmodels["transactionVM"]
+    _seed_expense(viewmodels, "Delete me", "450.75")
+    QTest.qWait(200)
+
+    app_vm.navigateTo("transactions")
+    QTest.qWait(400)
+    assert txn_vm.activeCount == 1
+    assert txn_vm.historyCount == 0
+
+    row = next(
+        item
+        for item in _walk(window.contentItem())
+        if item.property("description") == "Delete me"
+        and item.metaObject().className().startswith("TransactionRow")
+        and item.isVisible()
+    )
+    delete_button = next(
+        item for item in _walk(row) if item.objectName() == "deleteTransactionButton"
+    )
+
+    # Hovering the row reveals the delete button and keeps it steady: the button must
+    # not oscillate between visible and hidden while the pointer is on it.
+    QTest.mouseMove(window, _scene_centre(row))
+    QTest.qWait(150)
+    QTest.mouseMove(window, _scene_centre(delete_button))
+    QTest.qWait(250)
+    assert delete_button.isVisible(), "The delete button never appeared on hover"
+    QTest.qWait(250)
+    assert delete_button.isVisible(), "The delete button flickered while hovered"
+
+    QTest.mouseClick(window, Qt.LeftButton, Qt.NoModifier, _scene_centre(delete_button))
+    QTest.qWait(300)
+
+    confirm_dialog = _find_dialog(window, "ConfirmDialog")
+    assert confirm_dialog.property("open") is True, "Delete must ask for confirmation"
+
+    QTest.mouseClick(
+        window, Qt.LeftButton, Qt.NoModifier, _scene_centre(_find_button(confirm_dialog, "Delete"))
+    )
+    QTest.qWait(400)
+
+    assert confirm_dialog.property("open") is False
+    assert txn_vm.activeCount == 0, "The deleted row is still in the live ledger"
+    assert txn_vm.historyCount == 1, "The deleted row was not kept in History"
+
+    # History tab shows the deleted record instead of dropping it entirely.
+    QTest.mouseClick(
+        window,
+        Qt.LeftButton,
+        Qt.NoModifier,
+        _scene_centre(_find_object(window, "ledgerTab_history")),
+    )
+    QTest.qWait(400)
+    assert txn_vm.viewMode == "history"
+    assert [t["description"] for t in txn_vm.transactions] == ["Delete me"]
+    assert txn_vm.transactions[0]["voidedAt"] != ""
+
+    del qml_engine
+
+
+def test_report_charts_render_and_follow_deletions(qapp, tmp_path: Path):
+    """Charts get their data from the view models and refresh after a delete."""
+    qml_engine, window, viewmodels = _load_shell(tmp_path)
+    window.resize(1200, 750)
+    QTest.qWait(200)
+
+    app_vm = viewmodels["appVM"]
+    txn_vm = viewmodels["transactionVM"]
+    transaction_id = _seed_expense(viewmodels, "Chart fuel", "300")
+    QTest.qWait(200)
+
+    app_vm.navigateTo("reports")
+    QTest.qWait(500)
+
+    monthly_chart = _find_object(window, "monthlyBarChart")
+    monthly = monthly_chart.property("bars")
+    assert monthly is not None and len(monthly) == 6, "Monthly chart has no months to plot"
+    assert monthly[-1]["expensesPaise"] == 30000
+
+    person_chart = _find_object(window, "personSpendingChart")
+    spending = person_chart.property("items")
+    assert len(spending) == 1
+    assert spending[0]["amountPaise"] == 30000
+
+    category_chart = _find_object(window, "categorySpendingChart")
+    assert len(category_chart.property("items")) == 1
+
+    # Deleting the record has to flow through every chart without a restart; the view
+    # model's dataChanged signal is what drives the refresh, not the caller.
+    txn_vm.voidTransaction(transaction_id)
+    QTest.qWait(400)
+
+    assert len(person_chart.property("items")) == 0
+    assert len(category_chart.property("items")) == 0
+    assert monthly_chart.property("bars")[-1]["expensesPaise"] == 0
+
+    del qml_engine
 
 
 def test_app_viewmodel_navigation(tmp_path: Path):
