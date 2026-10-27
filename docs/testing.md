@@ -7,47 +7,61 @@ Financial applications demand strict verification. Every financial computation, 
 
 ## 2. Testing Levels
 
+Run everything with `pytest` from the repository root. The suite below is the actual
+current inventory — it is deliberately factual, so it can be trusted as a coverage map.
+
 ### 2.1 Unit Tests (`tests/unit/`)
-- **Monetary Logic (`test_money.py`)**:
+- **Monetary Logic (`test_money.py`)**
   - Exact integer paise representation (e.g. `Money(100)` = ₹1.00).
-  - Prevention of floating point instantiation without explicit rounding.
-  - Addition, subtraction, multiplication by scalar, division with explicit round modes.
-  - Indian numbering system formatting (`₹1,23,456.78`).
-  - Parsing from user input strings (`"1234.50"`, `"1,200"`).
-- **Domain Entities & Policies (`test_entities.py`, `test_policies.py`)**:
-  - Account balance calculation from entries.
-  - Credit card liability sign conventions.
-  - Transfer invariant: balanced inflow and outflow entries.
-  - Exclusion of transfers from income and expense aggregates.
-  - Refund policy: reducing expense rather than adding income.
-  - Budget alert threshold calculations (75%, 90%, 100%).
+  - Rejection of binary floats.
+  - Addition, subtraction, scalar multiplication, division with `ROUND_HALF_UP`.
+  - Indian numbering formatting (`₹1,23,456.78`) including lakh/crore and negatives.
+  - Parsing from user input strings (`"1234.50"`, `"₹ 1,200.00"`, `"-50.25"`).
+- **Ledger Policy (`test_ledger_policy.py`)**
+  - Asset and credit-card liability balance sign conventions.
+  - Entry validation for income and transfers.
+  - Rejection of same-account transfers and unbalanced legs.
+- **Financial Invariants (`test_financial_invariants.py`)**
+  - INV-1 internal transfer leaves total assets unchanged.
+  - INV-2 budget utilisation thresholds (75% / 90% / 100%).
+  - INV-3 lent = receivable, borrowed = payable, neither is income/expense.
+  - INV-4 savings-goal progress and remaining amount.
+- **Entity Timestamps (`test_entity_timestamps.py`)**
+  - Every entity timestamp is produced by a `default_factory`, not a value frozen at import time.
 
 ### 2.2 Integration Tests (`tests/integration/`)
-- **Database Repositories & Unit of Work (`test_repositories.py`)**:
-  - Foreign key constraints enforcement.
-  - Atomic multi-entry transaction commit & rollback on failure.
-  - Migration execution from baseline to latest schema.
-  - Reopening SQLite database across process restarts.
-- **Application Services (`test_services.py`)**:
-  - `AccountService.create_account()`, `archive_account()`.
-  - `TransactionService.record_income()`, `record_expense()`, `record_transfer()`, `void_transaction()`.
-  - `BudgetService.check_budget_status()`.
-  - `GoalService.contribute()`.
-  - `DebtService.record_debt()`, `record_payment()`.
-- **Backup & Restore (`test_backup.py`)**:
-  - Native SQLite online backup integrity.
-  - Cryptographic / schema version validation before restore.
-  - Restoration idempotency and ledger preservation.
-- **Export (`test_export.py`)**:
-  - Standard RFC 4180 CSV generation.
-  - Correct formatting of amounts, dates, and account tags.
+- **Persistence & Ledger Consistency (`test_database_persistence.py`)**
+  - Default category seeding on initialisation.
+  - Income/expense lifecycle updates account balances exactly.
+  - Atomic transfers, and rejection of same-account transfers.
+  - Voiding a transaction restores the balance exactly once.
+  - Data survives closing and reopening the database.
+- **Financial Guards (`test_financial_guards.py`)**
+  - Income/expense rejected for a mismatched or archived category.
+  - Transactions and transfers rejected for a non-existent person.
+  - Debt overpayment, settled-debt repayment, and non-positive repayment rejected.
+  - Partial repayments reconcile exactly with the remaining balance.
+- **Backup & Restore (`test_backup_restore.py`)**
+  - SQLite online-backup integrity and round-trip restore.
+  - The pre-restore safety copy captures data still resident in the WAL.
+  - Stale `-wal` / `-shm` sidecars are removed during restore.
+  - Unrelated SQLite files are rejected as backups.
+- **Settings Backup/Restore Workflow (`test_settings_restore_workflow.py`)**
+  - Backups are listed, restoring replaces data and notifies the shell, failures are reported.
+- **CSV Export (`test_csv_export.py`)**
+  - RFC 4180 output with exact amounts, dates, and account tags.
+  - Spreadsheet formula injection is neutralised for user-controlled text.
 
 ### 2.3 UI & Presentation Tests (`tests/ui/`)
-- ViewModels and ListModels:
-  - Filtering and pagination responsiveness.
-  - Error and loading state exposure.
-  - Property change notification signals.
-  - Theme switching state management.
+- **QML shell (`test_qml_loading.py`)**: `App.qml` loads offscreen, the window colour binding
+  resolves through `themeEngine`, and navigation state changes via `AppViewModel`.
+
+### 2.4 Not yet covered
+
+The following are **not** currently covered by automated tests and are tracked in
+[release.md](release.md) as known limitations: GUI form-level validation paths, keyboard/focus
+navigation, colour-contrast checks, packaged-executable behaviour, and migration of an existing
+database across a schema change.
 
 ---
 

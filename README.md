@@ -40,6 +40,23 @@ python main.py
 pytest -v
 ```
 
+### Building the Windows Executable
+```powershell
+python scripts/build_windows.py
+```
+The bundle is written to `dist/PaisaFlow/`. See [Release & Packaging Guide](docs/release.md)
+for verification steps.
+
+---
+
+## Privacy & Security Scope
+
+PaisaFlow is offline-first: it makes no network connections and collects no telemetry. It does
+**not** encrypt the database, does **not** provide user authentication, and has no application
+PIN. Protection therefore relies on your operating-system account security and disk encryption.
+People recorded in the app are financial profiles for reporting, not user accounts. See
+[Known Limitations](docs/release.md#5-known-limitations) for the full list.
+
 ---
 
 ## Documentation

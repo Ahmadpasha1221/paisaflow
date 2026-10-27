@@ -27,12 +27,14 @@ Accounts are categorized as either **Asset** or **Liability**:
 1. **Income**:
    - Creates a transaction of type `income`.
    - Generates an **inflow** `TransactionEntry` on the target Asset account.
+   - The category must be an **income** category (`IncompatibleCategoryError` otherwise).
    - Reflected in Income Reports and Cash Flow as positive cash flow.
    - Budget impact: None (budgets track expenses).
 
 2. **Expense**:
    - Creates a transaction of type `expense`.
    - Generates an **outflow** `TransactionEntry` on the source account (Asset balance decreases or Credit Card liability increases).
+   - The category must be an **expense** category (`IncompatibleCategoryError` otherwise).
    - Reflected in Expense Reports and Cash Flow as negative cash flow.
    - Budget impact: Consumes corresponding category and person budget limit.
 
@@ -52,7 +54,11 @@ Accounts are categorized as either **Asset** or **Liability**:
 5. **Loan Principal & Debt**:
    - **Money Lent**: Outflow from Asset account, recorded as a receivable debt. Does not count as an expense.
    - **Money Borrowed**: Inflow to Asset account, recorded as a debt liability. Does not count as income.
-   - **Repayments**: Reduce the outstanding debt principal balance.
+   - **Repayments**: Reduce the outstanding debt principal balance by the exact repaid amount.
+   - A repayment must be strictly positive, may **not** exceed the outstanding balance, and may not
+     be recorded against an already-settled debt (`InvalidDebtPaymentError`). Overpayments are
+     rejected rather than silently truncated, so repayment history always reconciles with the
+     original principal.
 
 ---
 
@@ -68,7 +74,26 @@ Accounts are categorized as either **Asset** or **Liability**:
 
 ---
 
-## 4. Budget Tracking Rules
+## 4. Input Validation Guards
+
+These guards are enforced in the application services, so an invalid operation is rejected
+before any ledger entry is written:
+
+| Guard | Rule | Exception |
+|-------|------|-----------|
+| Category type | An income transaction requires an income category; an expense requires an expense category. | `IncompatibleCategoryError` |
+| Archived category | Archived categories cannot receive new transactions. | `CategoryArchivedError` |
+| Archived account | Archived accounts cannot receive income, expenses, or transfers. | `AccountArchivedError` |
+| Person reference | Transactions and transfers must reference an existing person. | `EntityNotFoundError` |
+| Account reference | Transactions and transfers must reference existing accounts. | `EntityNotFoundError` |
+| Self transfer | Source and destination accounts must differ. | `InvalidTransferError` |
+| Amount sign | Transaction, entry, and repayment amounts must be strictly positive. | `InvalidTransactionError` / `InvalidDebtPaymentError` |
+| Debt repayment | Repayments may not exceed the outstanding balance or target a settled debt. | `InvalidDebtPaymentError` |
+| Monetary type | Binary floats can never initialise a `Money` value. | `InvalidMonetaryValueError` |
+
+---
+
+## 5. Budget Tracking Rules
 1. Monthly budgets compare actual category expenses within $[ \text{Month Start}, \text{Month End} ]$.
 2. Transferred funds and loan disbursements are excluded from budget utilization.
 3. Threshold alerts are triggered at:
