@@ -7,6 +7,21 @@ from typing import Iterable, Optional
 from paisaflow.domain.entities.transaction import Transaction
 from paisaflow.infrastructure.database.unit_of_work import SqlAlchemyUnitOfWork
 
+# Characters that make spreadsheet applications (Excel, LibreOffice, Google Sheets)
+# treat a cell as a formula when the CSV is opened directly.
+_FORMULA_TRIGGER_CHARS = ("=", "+", "-", "@", "\t", "\r")
+
+
+def sanitize_spreadsheet_cell(value: str) -> str:
+    """Neutralise spreadsheet formula injection for user-controlled text fields.
+
+    A leading quote is the conventional, spreadsheet-safe way to keep the original
+    text visible while preventing the cell from being evaluated as a formula.
+    """
+    if value and value[0] in _FORMULA_TRIGGER_CHARS:
+        return "'" + value
+    return value
+
 
 class CsvExportService:
     def __init__(self, uow: SqlAlchemyUnitOfWork) -> None:
@@ -57,18 +72,18 @@ class CsvExportService:
 
                     writer.writerow(
                         [
-                            t.reference_no,
+                            sanitize_spreadsheet_cell(t.reference_no),
                             t.transaction_date.isoformat(),
                             t.transaction_time.isoformat(),
                             t.transaction_type.value,
-                            t.description,
+                            sanitize_spreadsheet_cell(t.description),
                             t.amount.format(include_symbol=False),
-                            person_name,
-                            cat_name,
+                            sanitize_spreadsheet_cell(person_name),
+                            sanitize_spreadsheet_cell(cat_name),
                             t.payment_method.value,
                             t.status.value,
-                            affected_accts,
-                            t.notes or "",
+                            sanitize_spreadsheet_cell(affected_accts),
+                            sanitize_spreadsheet_cell(t.notes or ""),
                         ]
                     )
 

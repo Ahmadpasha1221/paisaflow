@@ -298,8 +298,14 @@ class TransactionRepository:
         status: Optional[TransactionStatus] = None,
         limit: int = 50,
         offset: int = 0,
+        include_voided: bool = True,
     ) -> Tuple[List[Transaction], int]:
-        """Query transactions with filtering and pagination. Returns (transactions, total_count)."""
+        """Query transactions with filtering and pagination. Returns (transactions, total_count).
+
+        ``include_voided=False`` is what the live ledger, dashboards and budgets use:
+        deleted transactions are kept for the audit trail but must stop counting towards
+        balances and reports immediately.
+        """
         stmt = select(TransactionModel)
 
         if account_id is not None:
@@ -319,6 +325,8 @@ class TransactionRepository:
             stmt = stmt.where(TransactionModel.transaction_type == txn_type.value)
         if status is not None:
             stmt = stmt.where(TransactionModel.status == status.value)
+        if not include_voided:
+            stmt = stmt.where(TransactionModel.status != TransactionStatus.VOIDED.value)
         if search_text and search_text.strip():
             pattern = f"%{search_text.strip()}%"
             stmt = stmt.where(
