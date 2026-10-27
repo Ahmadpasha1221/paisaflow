@@ -21,6 +21,16 @@ class ThemeEngine(QObject):
         return self._is_dark
 
     @Slot()
+    def reloadTheme(self) -> None:
+        """Re-read the persisted theme preference (e.g. after a database restore)."""
+        with self._uow as u:
+            saved_theme = u.settings.get("theme", "dark")
+        restored_is_dark = saved_theme == "dark"
+        if self._is_dark != restored_is_dark:
+            self._is_dark = restored_is_dark
+            self.themeChanged.emit()
+
+    @Slot()
     def toggleTheme(self) -> None:
         self.setTheme("light" if self._is_dark else "dark")
 

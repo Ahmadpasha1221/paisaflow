@@ -15,6 +15,8 @@ class AppViewModel(QObject):
     dataRefreshed = Signal()
     toastRequested = Signal(str, bool)  # message, is_error
     dialogRequested = Signal(str)  # dialog_type: 'transaction', 'account', 'person', etc.
+    restoreRequested = Signal(str, str)  # backup path, backup display name
+    transactionDeleteRequested = Signal(int, str)  # transaction id, description
 
     def __init__(self, uow: SqlAlchemyUnitOfWork) -> None:
         super().__init__()
@@ -77,6 +79,16 @@ class AppViewModel(QObject):
     @Slot(str)
     def openDialog(self, dialog_type: str) -> None:
         self.dialogRequested.emit(dialog_type)
+
+    @Slot(str, str)
+    def requestRestore(self, backup_path: str, backup_name: str) -> None:
+        """Ask the shell to open the restore confirmation for a specific backup snapshot."""
+        self.restoreRequested.emit(backup_path, backup_name)
+
+    @Slot(int, str)
+    def requestTransactionDelete(self, transaction_id: int, description: str) -> None:
+        """Ask the shell to confirm deleting a transaction before it is voided."""
+        self.transactionDeleteRequested.emit(transaction_id, description)
 
     @Slot(str, bool)
     def showToast(self, message: str, is_error: bool = False) -> None:

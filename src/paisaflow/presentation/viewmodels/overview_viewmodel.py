@@ -106,8 +106,8 @@ class OverviewViewModel(QObject):
             return []
         return [
             {
-                "categoryName": c.category_name,
-                "colorCode": c.color_code,
+                "label": c.category_name,
+                "color": c.color_code,
                 "amount": c.amount_formatted,
                 "amountPaise": c.amount_paise,
                 "percentage": c.percentage,

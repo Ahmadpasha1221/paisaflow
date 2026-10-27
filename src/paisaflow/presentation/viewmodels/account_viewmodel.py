@@ -66,7 +66,7 @@ class AccountViewModel(QObject):
     def totalLiabilitiesCount(self) -> int:
         return sum(1 for a in self._accounts if a.is_liability)
 
-    @Slot(str, str, int, str, str)
+    @Slot(str, str, int, str, str, result=bool)
     def createAccount(
         self,
         name: str,
@@ -100,7 +100,7 @@ class AccountViewModel(QObject):
             self.operationError.emit(str(e))
             return False
 
-    @Slot(int)
+    @Slot(int, result=bool)
     def archiveAccount(self, account_id: int) -> bool:
         try:
             self._account_service.archive_account(account_id)

@@ -20,6 +20,8 @@ class ReportsViewModel(QObject):
         self._person_filter: Optional[int] = None
         self._monthly_trends: List[dict] = []
         self._category_shares: List[dict] = []
+        self._person_shares: List[dict] = []
+        self._total_expenses: str = "₹0.00"
         self.refresh()
 
     @Slot(int)
@@ -74,6 +76,7 @@ class ReportsViewModel(QObject):
                 trends.append(
                     {
                         "month": month_name,
+                        "shortMonth": m_start.strftime("%b"),
                         "income": Money(inc_paise).format(),
                         "incomePaise": inc_paise,
                         "expenses": Money(exp_paise).format(),
@@ -108,8 +111,36 @@ class ReportsViewModel(QObject):
                 )
                 cat_shares.append(
                     {
-                        "category": c_name,
+                        "label": c_name,
                         "color": c_color,
+                        "amount": Money(amt).format(),
+                        "amountPaise": amt,
+                        "percentage": float(pct),
+                    }
+                )
+
+            # Lifetime spending per household member, so the reports can show how
+            # much each person actually used.
+            person_map: dict[int, int] = {}
+            for t in all_expenses:
+                person_map[t.person_id] = person_map.get(t.person_id, 0) + t.amount.paise
+
+            people = {p.id: p for p in uow.people.get_all(include_inactive=True)}
+            person_shares = []
+            for pid, amt in sorted(person_map.items(), key=lambda x: x[1], reverse=True):
+                person = people.get(pid)
+                p_name = person.name if person else "Unknown"
+                p_color = person.color_code if person else "#82C9D4"
+                pct = (
+                    (Decimal(amt) / Decimal(total_exp_paise) * 100).quantize(Decimal("0.1"))
+                    if total_exp_paise > 0
+                    else Decimal(0)
+                )
+                person_shares.append(
+                    {
+                        "personId": pid,
+                        "label": p_name,
+                        "color": p_color,
                         "amount": Money(amt).format(),
                         "amountPaise": amt,
                         "percentage": float(pct),
@@ -118,6 +149,8 @@ class ReportsViewModel(QObject):
 
         self._monthly_trends = trends
         self._category_shares = cat_shares
+        self._person_shares = person_shares
+        self._total_expenses = Money(total_exp_paise).format()
         self.reportsChanged.emit()
 
     @Property(list, notify=reportsChanged)
@@ -127,3 +160,11 @@ class ReportsViewModel(QObject):
     @Property(list, notify=reportsChanged)
     def categoryShares(self) -> list:
         return self._category_shares
+
+    @Property(list, notify=reportsChanged)
+    def personSpending(self) -> list:
+        return self._person_shares
+
+    @Property(str, notify=reportsChanged)
+    def totalExpenses(self) -> str:
+        return self._total_expenses

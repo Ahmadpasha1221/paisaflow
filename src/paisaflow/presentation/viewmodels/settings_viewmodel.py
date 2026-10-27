@@ -14,6 +14,8 @@ from paisaflow.infrastructure.export.csv_exporter import CsvExportService
 
 class SettingsViewModel(QObject):
     settingsChanged = Signal()
+    backupsChanged = Signal()
+    databaseRestored = Signal()
     operationSuccess = Signal(str)
     operationError = Signal(str)
 
@@ -48,18 +50,35 @@ class SettingsViewModel(QObject):
     def logDirectory(self) -> str:
         return str(settings.log_dir)
 
-    @Slot()
+    @Property(list, notify=backupsChanged)
+    def backups(self) -> list:
+        """Available backup snapshots, newest first, for the restore workflow."""
+        entries = []
+        for path in self._backup_service.list_backups():
+            stat = path.stat()
+            entries.append(
+                {
+                    "path": str(path),
+                    "name": path.name,
+                    "sizeText": f"{stat.st_size / 1024:.0f} KB",
+                    "modified": datetime.fromtimestamp(stat.st_mtime).strftime("%Y-%m-%d %H:%M"),
+                }
+            )
+        return entries
+
+    @Slot(result=str)
     def createBackup(self) -> str:
         try:
             backup_file = self._backup_service.create_backup()
             msg = f"Backup saved: {backup_file.name}"
             self.operationSuccess.emit(msg)
+            self.backupsChanged.emit()
             return str(backup_file)
         except Exception as e:
             self.operationError.emit(f"Backup failed: {e}")
             return ""
 
-    @Slot(str)
+    @Slot(str, result=bool)
     def restoreBackup(self, backup_path_str: str) -> bool:
         try:
             path = Path(backup_path_str)
@@ -69,12 +88,14 @@ class SettingsViewModel(QObject):
 
             self._backup_service.restore_backup(path)
             self.operationSuccess.emit("Database successfully restored from backup snapshot.")
+            self.backupsChanged.emit()
+            self.databaseRestored.emit()
             return True
         except Exception as e:
             self.operationError.emit(f"Restore failed: {e}")
             return False
 
-    @Slot(str)
+    @Slot(str, result=str)
     def exportTransactionsCsv(self, destination_dir_str: str = "") -> str:
         try:
             dest_dir = (

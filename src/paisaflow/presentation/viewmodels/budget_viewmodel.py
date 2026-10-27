@@ -58,7 +58,7 @@ class BudgetViewModel(QObject):
             for b in self._budgets
         ]
 
-    @Slot(str, int, int, str, str, str, str)
+    @Slot(str, int, int, str, str, str, str, result=bool)
     def createBudget(
         self,
         name: str,

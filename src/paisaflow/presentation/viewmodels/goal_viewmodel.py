@@ -52,7 +52,7 @@ class GoalViewModel(QObject):
             for g in self._goals
         ]
 
-    @Slot(str, str, int, str, str)
+    @Slot(str, str, int, str, str, result=bool)
     def createGoal(
         self,
         name: str,
@@ -87,7 +87,7 @@ class GoalViewModel(QObject):
             self.operationError.emit(str(e))
             return False
 
-    @Slot(int, str, str)
+    @Slot(int, str, str, result=bool)
     def contribute(self, goal_id: int, amount_str: str, notes: str) -> bool:
         try:
             money = Money.from_str(amount_str)

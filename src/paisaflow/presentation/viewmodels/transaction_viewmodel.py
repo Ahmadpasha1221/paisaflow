@@ -13,15 +13,23 @@ from paisaflow.application.services import (
     TransactionService,
 )
 from paisaflow.domain.entities.category import CategoryType
-from paisaflow.domain.entities.transaction import PaymentMethod, TransactionType
+from paisaflow.domain.entities.transaction import (
+    PaymentMethod,
+    TransactionStatus,
+    TransactionType,
+)
 from paisaflow.domain.value_objects.money import Money
 from paisaflow.infrastructure.database.unit_of_work import SqlAlchemyUnitOfWork
 
 
 class TransactionViewModel(QObject):
     transactionsChanged = Signal()
+    dataChanged = Signal()  # any ledger mutation; the shell refreshes every other view model
     operationSuccess = Signal(str)
     operationError = Signal(str)
+
+    ACTIVE_MODE = "active"
+    HISTORY_MODE = "history"
 
     def __init__(self, uow: SqlAlchemyUnitOfWork) -> None:
         super().__init__()
@@ -33,6 +41,9 @@ class TransactionViewModel(QObject):
 
         self._transactions: List[TransactionDto] = []
         self._total_count: int = 0
+        self._active_count: int = 0
+        self._history_count: int = 0
+        self._view_mode: str = self.ACTIVE_MODE
         self._current_page: int = 0
         self._page_size: int = 25
         self._search_text: str = ""
@@ -43,8 +54,8 @@ class TransactionViewModel(QObject):
 
         self.refresh()
 
-    @Slot()
-    def refresh(self) -> None:
+    def _filter_kwargs(self) -> dict:
+        """Shared filters for the tab counters and the paged query."""
         txn_type = None
         if self._type_filter != "all":
             try:
@@ -52,16 +63,37 @@ class TransactionViewModel(QObject):
             except ValueError:
                 pass
 
-        person_id = self._person_filter if self._person_filter > 0 else None
-        category_id = self._category_filter if self._category_filter > 0 else None
-        account_id = self._account_filter if self._account_filter > 0 else None
+        return {
+            "person_id": self._person_filter if self._person_filter > 0 else None,
+            "category_id": self._category_filter if self._category_filter > 0 else None,
+            "account_id": self._account_filter if self._account_filter > 0 else None,
+            "txn_type": txn_type,
+            "search_text": self._search_text,
+        }
 
-        self._transactions, self._total_count = self._txn_service.query_transactions(
-            person_id=person_id,
-            category_id=category_id,
-            account_id=account_id,
-            txn_type=txn_type,
-            search_text=self._search_text,
+    @Slot()
+    def refresh(self) -> None:
+        filters = self._filter_kwargs()
+
+        # Counters for both ledger tabs come from the same filters, so the tabs always
+        # agree with what the list underneath them shows.
+        _, self._active_count = self._txn_service.query_transactions(
+            **filters, include_voided=False, limit=1, offset=0
+        )
+        _, self._history_count = self._txn_service.query_transactions(
+            **filters, status=TransactionStatus.VOIDED, limit=1, offset=0
+        )
+        self._total_count = (
+            self._history_count if self._view_mode == self.HISTORY_MODE else self._active_count
+        )
+
+        # Deleting the only record on the last page must not leave an empty page behind.
+        self._current_page = max(0, min(self._current_page, max(0, self.totalPages - 1)))
+
+        self._transactions, _ = self._txn_service.query_transactions(
+            **filters,
+            status=TransactionStatus.VOIDED if self._view_mode == self.HISTORY_MODE else None,
+            include_voided=self._view_mode == self.HISTORY_MODE,
             limit=self._page_size,
             offset=self._current_page * self._page_size,
         )
@@ -88,6 +120,9 @@ class TransactionViewModel(QObject):
                 "status": t.status,
                 "affectedAccounts": t.affected_accounts,
                 "notes": t.notes or "",
+                "createdAt": t.created_at,
+                "updatedAt": t.updated_at,
+                "voidedAt": t.voided_at,
             }
             for t in self._transactions
         ]
@@ -95,6 +130,27 @@ class TransactionViewModel(QObject):
     @Property(int, notify=transactionsChanged)
     def totalCount(self) -> int:
         return self._total_count
+
+    @Property(int, notify=transactionsChanged)
+    def activeCount(self) -> int:
+        return self._active_count
+
+    @Property(int, notify=transactionsChanged)
+    def historyCount(self) -> int:
+        return self._history_count
+
+    @Property(str, notify=transactionsChanged)
+    def viewMode(self) -> str:
+        return self._view_mode
+
+    @Slot(str)
+    def setViewMode(self, mode: str) -> None:
+        """Switch the ledger between live records ('active') and deleted ones ('history')."""
+        normalized = self.HISTORY_MODE if mode.lower() == self.HISTORY_MODE else self.ACTIVE_MODE
+        if normalized != self._view_mode:
+            self._view_mode = normalized
+            self._current_page = 0
+            self.refresh()
 
     @Property(int, notify=transactionsChanged)
     def currentPage(self) -> int:
@@ -161,7 +217,7 @@ class TransactionViewModel(QObject):
         return [{"id": c.id, "name": c.name} for c in cats]
 
     # Transaction Actions
-    @Slot(str, str, str, int, int, int, str, str)
+    @Slot(str, str, str, int, int, int, str, str, result=bool)
     def addIncome(
         self,
         date_str: str,
@@ -193,12 +249,13 @@ class TransactionViewModel(QObject):
             )
             self.operationSuccess.emit(f"Recorded income of {money.format()}.")
             self.refresh()
+            self.dataChanged.emit()
             return True
         except Exception as e:
             self.operationError.emit(str(e))
             return False
 
-    @Slot(str, str, str, int, int, int, str, str)
+    @Slot(str, str, str, int, int, int, str, str, result=bool)
     def addExpense(
         self,
         date_str: str,
@@ -230,12 +287,13 @@ class TransactionViewModel(QObject):
             )
             self.operationSuccess.emit(f"Recorded expense of {money.format()}.")
             self.refresh()
+            self.dataChanged.emit()
             return True
         except Exception as e:
             self.operationError.emit(str(e))
             return False
 
-    @Slot(str, str, str, int, int, int, str, str)
+    @Slot(str, str, str, int, int, int, str, str, result=bool)
     def addTransfer(
         self,
         date_str: str,
@@ -275,17 +333,20 @@ class TransactionViewModel(QObject):
             )
             self.operationSuccess.emit(f"Transferred {money.format()} between accounts.")
             self.refresh()
+            self.dataChanged.emit()
             return True
         except Exception as e:
             self.operationError.emit(str(e))
             return False
 
-    @Slot(int)
+    @Slot(int, result=bool)
     def voidTransaction(self, transaction_id: int) -> bool:
+        """Delete a transaction by voiding it: it leaves the ledger and moves to History."""
         try:
             self._txn_service.void_transaction(transaction_id)
-            self.operationSuccess.emit("Transaction voided successfully.")
+            self.operationSuccess.emit("Transaction deleted and moved to History.")
             self.refresh()
+            self.dataChanged.emit()
             return True
         except Exception as e:
             self.operationError.emit(str(e))

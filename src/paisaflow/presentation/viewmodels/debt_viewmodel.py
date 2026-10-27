@@ -54,7 +54,7 @@ class DebtViewModel(QObject):
             for d in self._debts
         ]
 
-    @Slot(str, int, str, str, str, str)
+    @Slot(str, int, str, str, str, str, result=bool)
     def recordDebt(
         self,
         debt_type_str: str,
@@ -92,7 +92,7 @@ class DebtViewModel(QObject):
             self.operationError.emit(str(e))
             return False
 
-    @Slot(int, str, str)
+    @Slot(int, str, str, result=bool)
     def recordPayment(self, debt_id: int, amount_str: str, notes: str) -> bool:
         try:
             money = Money.from_str(amount_str)

@@ -39,7 +39,7 @@ class PersonViewModel(QObject):
             for p in self._people
         ]
 
-    @Slot(str, str)
+    @Slot(str, str, result=bool)
     def createPerson(self, name: str, color_code: str = "#B8F28B") -> bool:
         try:
             if not name.strip():
@@ -57,7 +57,7 @@ class PersonViewModel(QObject):
             self.operationError.emit(str(e))
             return False
 
-    @Slot(int, str, str)
+    @Slot(int, str, str, result=bool)
     def updatePerson(self, person_id: int, name: str, color_code: str) -> bool:
         try:
             self._person_service.update_person(
