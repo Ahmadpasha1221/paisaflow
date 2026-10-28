@@ -119,6 +119,10 @@ def ensure_initial_seed(uow: SqlAlchemyUnitOfWork) -> None:
 
 def run_app() -> int:
     """Launch the PaisaFlow desktop application."""
+    if "--version" in sys.argv or "-v" in sys.argv:
+        print(f"PaisaFlow {settings.version}")
+        return 0
+
     # Ensure High DPI scaling is enabled
     os.environ["QT_ENABLE_HIGHDPI_SCALING"] = "1"
     os.environ["QT_AUTO_SCREEN_SCALE_FACTOR"] = "1"

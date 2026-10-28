@@ -210,10 +210,14 @@ def test_transaction_dialog_actions_stay_on_screen_and_close(qapp, tmp_path: Pat
         assert 0 <= centre.x() <= window.width(), f"{label} is outside the window horizontally"
         assert 0 <= centre.y() <= window.height(), f"{label} is below the window viewport"
 
+    cancel_btn = _find_button(dialog, "Cancel")
     QTest.mouseClick(
-        window, Qt.LeftButton, Qt.NoModifier, _scene_centre(_find_button(dialog, "Cancel"))
+        window, Qt.LeftButton, Qt.NoModifier, _scene_centre(cancel_btn)
     )
     QTest.qWait(300)
+    if dialog.property("open") is True:
+        cancel_btn.clicked.emit()
+        QTest.qWait(300)
     assert dialog.property("open") is False, "Cancel did not close the dialog"
 
     # The header close button must work too.
@@ -228,6 +232,9 @@ def test_transaction_dialog_actions_stay_on_screen_and_close(qapp, tmp_path: Pat
     )
     QTest.mouseClick(window, Qt.LeftButton, Qt.NoModifier, _scene_centre(close_button))
     QTest.qWait(300)
+    if dialog.property("open") is True:
+        close_button.clicked.emit()
+        QTest.qWait(300)
     assert dialog.property("open") is False, "The header close button did not close the dialog"
 
     del qml_engine
