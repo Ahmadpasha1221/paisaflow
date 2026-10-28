@@ -401,6 +401,13 @@ def test_report_charts_render_and_follow_deletions(qapp, tmp_path: Path):
     category_chart = _find_object(window, "categorySpendingChart")
     assert len(category_chart.property("items")) == 1
 
+    overview_chart = _find_object(window, "overviewCashFlowChart")
+    reports_line_chart = _find_object(window, "reportsNetCashFlowChart")
+    assert len(overview_chart.property("points")) == 6
+    assert len(reports_line_chart.property("points")) == 6
+    assert overview_chart.property("points")[-1]["netPaise"] == -30000
+    assert reports_line_chart.property("curveSegmentCount") == 5
+
     # Deleting the record has to flow through every chart without a restart; the view
     # model's dataChanged signal is what drives the refresh, not the caller.
     txn_vm.voidTransaction(transaction_id)
@@ -409,7 +416,89 @@ def test_report_charts_render_and_follow_deletions(qapp, tmp_path: Path):
     assert len(person_chart.property("items")) == 0
     assert len(category_chart.property("items")) == 0
     assert monthly_chart.property("bars")[-1]["expensesPaise"] == 0
+    assert overview_chart.property("points")[-1]["netPaise"] == 0
+    assert reports_line_chart.property("points")[-1]["netPaise"] == 0
 
+    del qml_engine
+
+
+def test_smooth_chart_maps_exact_values_and_handles_edge_cases(qapp, tmp_path: Path):
+    """The chart draws exact source points, gaps, negative values and degenerate ranges."""
+    qml_engine, window, viewmodels = _load_shell(tmp_path)
+    chart = _find_object(window, "overviewCashFlowChart")
+
+    points = [
+        {"month": "Jan 2026", "shortMonth": "Jan", "netPaise": -12500, "net": "-₹125.00"},
+        {"month": "Feb 2026", "shortMonth": "Feb", "netPaise": 0, "net": "₹0.00"},
+        {"month": "Mar 2026", "shortMonth": "Mar", "netPaise": 25000, "net": "₹250.00"},
+    ]
+    assert chart.setProperty("points", points)
+    mapped = chart.property("mappedPoints").toVariant()
+    assert len(mapped) == 3
+    assert [point["valuePaise"] for point in mapped] == [-12500, 0, 25000]
+    assert mapped[0]["y"] > mapped[1]["y"] > mapped[2]["y"]
+    assert chart.property("curveSegmentCount") == 2
+    assert chart.property("domainMinimumPaise") < -12500
+    assert chart.property("domainMaximumPaise") > 25000
+
+    # A missing period is a real gap; the renderer must not connect over it.
+    points[1]["netPaise"] = None
+    assert chart.setProperty("points", points)
+    mapped = chart.property("mappedPoints").toVariant()
+    assert [point["index"] for point in mapped] == [0, 2]
+    assert chart.property("curveSegmentCount") == 0
+
+    # Single, equal, zero-only, empty and large-valued inputs remain finite.
+    single = [points[0]]
+    assert chart.setProperty("points", single)
+    mapped = chart.property("mappedPoints").toVariant()
+    assert len(mapped) == 1
+    assert mapped[0]["x"] == pytest.approx(chart.property("plotLeft") + chart.property("plotWidth") / 2)
+    assert chart.property("curveSegmentCount") == 0
+
+    zeroes = [
+        {"month": "A", "shortMonth": "A", "netPaise": 0, "net": "₹0.00"},
+        {"month": "B", "shortMonth": "B", "netPaise": 0, "net": "₹0.00"},
+    ]
+    assert chart.setProperty("points", zeroes)
+    assert chart.property("domainMaximumPaise") > 0
+    assert len(chart.property("mappedPoints").toVariant()) == 2
+
+    assert chart.setProperty("points", [])
+    assert chart.property("mappedPoints").toVariant() == []
+    assert chart.property("curveSegmentCount") == 0
+
+    large = [
+        {"month": "A", "shortMonth": "A", "netPaise": -10**14, "net": "-large"},
+        {"month": "B", "shortMonth": "B", "netPaise": 10**14, "net": "large"},
+    ]
+    assert chart.setProperty("points", large)
+    mapped = chart.property("mappedPoints").toVariant()
+    assert len(mapped) == 2
+    assert all(0 <= point["y"] <= chart.height() for point in mapped)
+
+    assert chart.setProperty("points", points[:2])
+    assert chart.setProperty("selectedIndex", 0)
+    assert chart.property("selectedText") == "Jan 2026  ·  Net cash flow  -₹125.00"
+    assert chart.property("accessibleSummary") == chart.property("selectedText")
+    assert chart.property("activeFocusOnTab") is True
+    assert chart.setProperty("selectedIndex", -1)
+    chart.forceActiveFocus()
+    assert chart.hasActiveFocus()
+    QTest.keyClick(window, Qt.Key_Right)
+    QTest.qWait(60)
+    assert chart.property("selectedIndex") == 0
+    QTest.keyClick(window, Qt.Key_Right)
+    QTest.qWait(60)
+    assert chart.property("selectedIndex") == 1
+
+    viewmodels["themeEngine"].toggleTheme()
+    assert chart.property("mappedPoints").toVariant()[0]["valuePaise"] == -12500
+    original_chart_width = chart.width()
+    window.resize(960, 600)
+    QTest.qWait(150)
+    assert chart.width() < original_chart_width
+    assert chart.property("plotWidth") < original_chart_width - chart.property("plotLeft") - chart.property("plotRight")
     del qml_engine
 
 

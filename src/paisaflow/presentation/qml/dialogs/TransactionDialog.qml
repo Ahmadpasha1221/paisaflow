@@ -130,19 +130,13 @@ ModalDialog {
                 width: parent.width
                 height: 42
                 radius: 8
-                color: themeEngine.isDark ? "#1F2E26" : "#FFFFFF"
-                border.color: descInput.activeFocus ? themeEngine.primaryAccent : themeEngine.divider
-                border.width: descInput.activeFocus ? 1.5 : 1
+                color: "transparent"
+                border.color: "transparent"
 
-                TextField {
+                TextInputField {
                     id: descInput
                     anchors.fill: parent
-                    anchors.margins: 10
-                    color: themeEngine.primaryText
-                    placeholderTextColor: themeEngine.secondaryText
                     placeholderText: "e.g. Grocery shopping, Salary deposit"
-                    background: Item {}
-                    selectByMouse: true
                 }
             }
         }

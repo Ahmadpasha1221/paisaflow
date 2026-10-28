@@ -6,13 +6,17 @@ Rectangle {
 
     property alias text: textField.text
     property alias placeholderText: textField.placeholderText
+    property alias readOnly: textField.readOnly
+    property bool hasError: false
 
     implicitHeight: 42
     implicitWidth: parent ? parent.width : 280
     radius: 8
-    color: themeEngine.isDark ? "#1F2E26" : "#FFFFFF"
-    border.color: textField.activeFocus ? themeEngine.primaryAccent : themeEngine.divider
-    border.width: textField.activeFocus ? 1.5 : 1
+    color: !textField.enabled ? themeEngine.disabledSurface
+         : (textField.readOnly ? themeEngine.secondarySurface
+         : (textField.hovered && !textField.activeFocus ? themeEngine.inputHoverSurface : themeEngine.inputSurface))
+    border.color: hasError ? themeEngine.negative : (textField.activeFocus ? themeEngine.primaryAccent : themeEngine.divider)
+    border.width: hasError || textField.activeFocus ? 1.5 : 1
 
     Behavior on border.color {
         ColorAnimation { duration: 120 }
@@ -24,20 +28,16 @@ Rectangle {
         anchors.rightMargin: 12
         spacing: 8
 
-        TextField {
+        TextInputField {
             id: textField
-            width: parent.width - 24
+            width: Math.max(0, parent.width - 24)
             height: parent.height
             anchors.verticalCenter: parent.verticalCenter
-            verticalAlignment: TextInput.AlignVCenter
-            color: themeEngine.primaryText
-            placeholderTextColor: themeEngine.secondaryText
+            leftPadding: 4
+            rightPadding: 8
             placeholderText: "YYYY-MM-DD"
-            font.pixelSize: 14
-            font.family: "Segoe UI, Inter, sans-serif"
             font.features: { "tnum": 1 }
             background: Item {}
-            selectByMouse: true
         }
     }
 }

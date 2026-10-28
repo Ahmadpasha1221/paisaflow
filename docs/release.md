@@ -5,85 +5,72 @@ PaisaFlow distributes as a self-contained Windows desktop application. It requir
 
 ---
 
-## 2. Windows Packaging Architecture
+## 2. Multi-Platform Packaging Architecture
 
 ### 2.1 Target Packaging Tools
-- **PyInstaller / pyside6-deploy**:
-  - Compiles the application into a standalone folder or single executable bundle including Python runtime, PySide6 DLLs, Qt QML plugins, and compiled QML assets.
-  - Windows executable metadata: application icon, company name, product version, file description.
+- **PyInstaller**:
+  - Compiles the application into a standalone folder including Python runtime, PySide6 DLLs, Qt QML plugins, and compiled QML assets.
+  - Platform metadata: multi-resolution embedded icons (`brand.ico` on Windows, `brand.icns` on macOS, hicolor desktop icons on Linux).
+  - Explicit AppUserModelID on Windows (`PaisaFlow.Flowline.Desktop.0.1.0`) ensuring proper taskbar separation from Python.
   - Entry point: `paisaflow/main.py`.
 
 ### 2.2 Data Directory Separation
-- **Application Binaries**: `C:\Program Files\PaisaFlow\` (or user portable folder).
-- **User Data & Database**: `%LOCALAPPDATA%\PaisaFlow\data\paisaflow.db`.
-- **Backups**: `%LOCALAPPDATA%\PaisaFlow\backups\`.
-- **Logs**: `%LOCALAPPDATA%\PaisaFlow\logs\paisaflow.log`.
+- **Application Binaries**: Read-only distribution folder (e.g. `C:\Program Files\PaisaFlow\` or extracted portable directory).
+- **User Data & Database**:
+  - Windows: `%LOCALAPPDATA%\PaisaFlow\data\paisaflow.db`
+  - Linux: `~/.local/share/paisaflow/data/paisaflow.db`
+  - macOS: `~/Library/Application Support/PaisaFlow/data/paisaflow.db`
+- **Backups**: Separated under `backups/` in the user data directory.
+- **Logs**: Written to `logs/paisaflow.log` in the user data directory.
 - **Upgrade Invariant**: Overwriting or replacing binary files during an application update NEVER touches or alters the data directory.
 
 ---
 
 ## 3. Reproducible Build
 
-Build the distributable with the packaging script (it derives every path from its own
-location, so no machine-specific configuration is required):
+Generate icons and build packages locally:
 
 ```powershell
-.\\.venv\\Scripts\\Activate.ps1
+# Setup environment
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
 pip install -e ".[dev]"
-python -m pip install pyinstaller
-python scripts/build_windows.py
+
+# Generate icons
+python scripts/generate_icons.py
+
+# Build platform packages
+python scripts/build_windows.py   # Windows x64 ZIP + SHA-256
+python scripts/build_linux.py     # Linux x64 TAR.GZ + SHA-256
+python scripts/build_macos.py     # macOS ZIP + SHA-256
 ```
 
-The resulting bundle is written to `dist/PaisaFlow/` (`PaisaFlow.exe` plus `_internal/`).
-`PaisaFlow.spec` is an equivalent declarative form of the same build and is also
-path-independent.
-
-Verify the bundle before shipping:
-
-```powershell
-Test-Path dist/PaisaFlow/PaisaFlow.exe
-dist/PaisaFlow/PaisaFlow.exe
-```
-
-There is no installer (MSI/Inno Setup) in the repository; the distributable is the
-portable folder produced above.
+All distribution archives and `.sha256` checksums are placed into `dist/`.
 
 ---
 
 ## 4. Pre-Release Verification Checklist
-1. All automated tests in `tests/` pass with zero failures (`pytest`).
-2. Linting passes (`ruff check .`) and formatting is clean (`ruff format --check .`).
-3. The packaged executable launches on a clean machine **without** the developer virtual
-   environment present.
-4. First launch creates the database under `%LOCALAPPDATA%\PaisaFlow\data\` and shows a
-   usable empty state.
-5. Backup creation and restore both succeed from the Settings page.
-6. CSV export completes and opens correctly in a spreadsheet.
-7. Both Dark and Light themes render, and the choice survives a restart.
-8. Installing into a path containing spaces works.
+1. All automated tests in `tests/` pass with zero failures (`pytest tests/ -v`).
+2. Linting passes (`ruff check .`).
+3. Platform icons (`.ico`, `.icns`, `.png`) are verified and embedded.
+4. The packaged executable launches on a clean environment without activating `.venv`.
+5. First launch creates the database in the appropriate user data path.
+6. Backup creation and restore both succeed from the Settings page.
+7. CSV export completes and opens correctly in a spreadsheet.
+8. Both Dark and Light themes render, and the choice survives a restart.
+9. Installing or launching from a path containing spaces works.
 
 ---
 
 ## 5. Known Limitations
 
-The following are deliberate, disclosed limitations of this milestone. They are **not**
-implemented, and the application must not be described as providing them:
+The following are deliberate, disclosed limitations of this milestone:
 
-- **No database encryption.** The SQLite file is stored in plaintext. Protection depends on
-  operating-system account security and disk encryption, not on the application.
-- **No authentication or access control.** "Profiles" (people) organise records for
-  reporting; they are not users and provide no privacy or permission boundary.
+- **No database encryption.** The SQLite file is stored in plaintext. Protection depends on operating-system account security and disk encryption.
+- **No authentication or access control.** "Profiles" (people) organise records for reporting; they are not users and provide no privacy boundary.
 - **No application PIN / lock screen.**
-- **No schema versioning or migration framework.** `initialize_database()` calls
-  `CREATE TABLE IF NOT EXISTS` and seeds defaults. It never drops or resets data, but it
-  also cannot alter an existing table, so a future release that changes a column layout
-  requires an explicit migration before that release can upgrade existing databases.
-- **No automatic backups.** Backups are created only when the user asks. There is therefore
-  no backup-retention policy to configure.
-- **A CSV export is not a backup.** It contains no schema, no settings, and no accounts,
-  goals, or debts, and cannot restore an installation.
-- **Refunds are not creatable from the UI.** The domain validates a `refund` transaction
-  type, but no service or form records one; corrections are made by voiding and re-entering.
-- **No duplicate-submission protection** beyond the reference-number uniqueness constraint.
-- **No application icon or Windows version metadata** is embedded in the executable.
-- **Packaging has not been validated on a machine without Python installed.**
+- **No schema versioning or migration framework.** `initialize_database()` calls `CREATE TABLE IF NOT EXISTS` and seeds defaults.
+- **No automatic backups.** Backups are created on-demand via the Settings interface.
+- **A CSV export is not a backup.** It contains no schema or non-transaction settings and cannot restore an installation.
+- **Refunds are not creatable from the UI.** Corrections are made by voiding and re-entering.
+- **macOS signing and notarization.** macOS release builds generated without an Apple Developer ID certificate require right-click -> "Open" on first launch.

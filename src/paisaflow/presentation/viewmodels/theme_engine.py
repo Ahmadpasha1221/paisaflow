@@ -66,6 +66,18 @@ class ThemeEngine(QObject):
         return "#30473A" if self._is_dark else "#FFFFFF"
 
     @Property(str, notify=themeChanged)
+    def inputSurface(self) -> str:
+        return "#1F2E26" if self._is_dark else "#FFFFFF"
+
+    @Property(str, notify=themeChanged)
+    def inputHoverSurface(self) -> str:
+        return "#26382F" if self._is_dark else "#F8FAF6"
+
+    @Property(str, notify=themeChanged)
+    def disabledSurface(self) -> str:
+        return "#1D2C23" if self._is_dark else "#EDF1EA"
+
+    @Property(str, notify=themeChanged)
     def primaryText(self) -> str:
         return "#F5F6F2" if self._is_dark else "#17251F"
 

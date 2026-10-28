@@ -104,6 +104,41 @@ ScrollView {
                 }
             }
 
+            // Shared six-month net cash-flow trend, matching the selected household filter.
+            Rectangle {
+                width: parent.width
+                implicitHeight: trendColumn.implicitHeight + 36
+                radius: 12
+                color: themeEngine.primarySurface
+                border.color: themeEngine.divider
+                border.width: 1
+
+                Column {
+                    id: trendColumn
+                    anchors.fill: parent
+                    anchors.margins: 18
+                    spacing: 12
+
+                    Text {
+                        text: "Cash Flow Trend (Last 6 Months)"
+                        color: themeEngine.primaryText
+                        font.pixelSize: 16
+                        font.weight: Font.DemiBold
+                        font.family: "Segoe UI, Inter, sans-serif"
+                    }
+
+                    SmoothAreaLineChart {
+                        objectName: "overviewCashFlowChart"
+                        width: parent.width
+                        height: 220
+                        points: reportsVM.monthlyTrends
+                        valueRole: "netPaise"
+                        formattedValueRole: "net"
+                        seriesLabel: "Net cash flow"
+                    }
+                }
+            }
+
             // Two-column layout: Recent Transactions (60%) & Category Breakdown (40%)
             Row {
                 width: parent.width

@@ -65,6 +65,41 @@ ScrollView {
             }
         }
 
+        // Smooth monthly net cash-flow series complements the income/expense bars above.
+        Rectangle {
+            width: parent.width
+            implicitHeight: netTrendCol.implicitHeight + 36
+            radius: 12
+            color: themeEngine.primarySurface
+            border.color: themeEngine.divider
+            border.width: 1
+
+            Column {
+                id: netTrendCol
+                anchors.fill: parent
+                anchors.margins: 18
+                spacing: 14
+
+                Text {
+                    text: "Net Cash Flow Trend"
+                    color: themeEngine.primaryText
+                    font.pixelSize: 16
+                    font.weight: Font.DemiBold
+                    font.family: "Segoe UI, Inter, sans-serif"
+                }
+
+                SmoothAreaLineChart {
+                    objectName: "reportsNetCashFlowChart"
+                    width: parent.width
+                    height: 220
+                    points: reportsVM.monthlyTrends
+                    valueRole: "netPaise"
+                    formattedValueRole: "net"
+                    seriesLabel: "Net cash flow"
+                }
+            }
+        }
+
         // Monthly comparison figures
         Rectangle {
             width: parent.width

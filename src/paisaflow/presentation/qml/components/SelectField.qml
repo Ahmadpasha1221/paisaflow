@@ -13,9 +13,12 @@ ComboBox {
     implicitHeight: 42
     implicitWidth: parent ? parent.width : 280
 
+    hoverEnabled: true
+
     background: Rectangle {
         radius: 8
-        color: themeEngine.isDark ? "#1F2E26" : "#FFFFFF"
+        color: !root.enabled ? themeEngine.disabledSurface
+             : (root.hovered && !root.activeFocus ? themeEngine.inputHoverSurface : themeEngine.inputSurface)
         border.color: root.activeFocus ? themeEngine.primaryAccent : themeEngine.divider
         border.width: root.activeFocus ? 1.5 : 1
 
@@ -25,9 +28,10 @@ ComboBox {
     }
 
     contentItem: Text {
-        leftPadding: 12
-        rightPadding: 32
+        leftPadding: 14
+        rightPadding: 36
         text: root.displayText
+        opacity: root.enabled ? 1 : 0.65
         font.pixelSize: 14
         font.family: "Segoe UI, Inter, sans-serif"
         color: themeEngine.primaryText
@@ -93,7 +97,7 @@ ComboBox {
                 var label = entry[root.textRoleName];
                 return label === undefined || label === null ? "" : label;
             }
-            color: themeEngine.primaryText
+            color: root.enabled ? themeEngine.primaryText : themeEngine.secondaryText
             font.pixelSize: 13
             font.family: "Segoe UI, Inter, sans-serif"
             verticalAlignment: Text.AlignVCenter

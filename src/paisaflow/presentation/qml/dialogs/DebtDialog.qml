@@ -70,19 +70,13 @@ ModalDialog {
                 width: parent.width
                 height: 42
                 radius: 8
-                color: themeEngine.isDark ? "#1F2E26" : "#FFFFFF"
-                border.color: counterpartyInput.activeFocus ? themeEngine.primaryAccent : themeEngine.divider
-                border.width: counterpartyInput.activeFocus ? 1.5 : 1
+                color: "transparent"
+                border.color: "transparent"
 
-                TextField {
+                TextInputField {
                     id: counterpartyInput
                     anchors.fill: parent
-                    anchors.margins: 10
-                    color: themeEngine.primaryText
-                    placeholderTextColor: themeEngine.secondaryText
                     placeholderText: "e.g. Ramesh, Personal Loan Co."
-                    background: Item {}
-                    selectByMouse: true
                 }
             }
         }

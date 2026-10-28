@@ -6,12 +6,15 @@ Rectangle {
 
     property alias text: textField.text
     property alias placeholderText: textField.placeholderText
+    property alias readOnly: textField.readOnly
     signal searchSubmitted(string query)
 
-    implicitHeight: 38
+    implicitHeight: 42
     implicitWidth: 260
     radius: 8
-    color: themeEngine.isDark ? "#1F2E26" : "#FFFFFF"
+    color: !textField.enabled ? themeEngine.disabledSurface
+         : (textField.readOnly ? themeEngine.secondarySurface
+         : (textField.hovered && !textField.activeFocus ? themeEngine.inputHoverSurface : themeEngine.inputSurface))
     border.color: textField.activeFocus ? themeEngine.primaryAccent : themeEngine.divider
     border.width: textField.activeFocus ? 1.5 : 1
 
@@ -32,19 +35,16 @@ Rectangle {
             anchors.verticalCenter: parent.verticalCenter
         }
 
-        TextField {
+        TextInputField {
             id: textField
-            width: parent.width - 48
+            width: Math.max(0, parent.width - 48)
             height: parent.height
             anchors.verticalCenter: parent.verticalCenter
-            verticalAlignment: TextInput.AlignVCenter
-            color: themeEngine.primaryText
-            placeholderTextColor: themeEngine.secondaryText
+            leftPadding: 2
+            rightPadding: 4
             placeholderText: "Search transactions..."
             font.pixelSize: 13
-            font.family: "Segoe UI, Inter, sans-serif"
             background: Item {}
-            selectByMouse: true
             onAccepted: root.searchSubmitted(textField.text)
         }
 

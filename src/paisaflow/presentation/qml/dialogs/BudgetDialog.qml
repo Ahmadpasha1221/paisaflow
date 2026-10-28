@@ -18,19 +18,13 @@ ModalDialog {
                 width: parent.width
                 height: 42
                 radius: 8
-                color: themeEngine.isDark ? "#1F2E26" : "#FFFFFF"
-                border.color: nameInput.activeFocus ? themeEngine.primaryAccent : themeEngine.divider
-                border.width: nameInput.activeFocus ? 1.5 : 1
+                color: "transparent"
+                border.color: "transparent"
 
-                TextField {
+                TextInputField {
                     id: nameInput
                     anchors.fill: parent
-                    anchors.margins: 10
-                    color: themeEngine.primaryText
-                    placeholderTextColor: themeEngine.secondaryText
                     placeholderText: "e.g. October Groceries, Dining Out"
-                    background: Item {}
-                    selectByMouse: true
                 }
             }
         }

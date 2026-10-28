@@ -16,18 +16,29 @@ class AppConfig(BaseModel):
         """Resolve platform-specific data directory.
 
         Windows: %LOCALAPPDATA%\\PaisaFlow
+        macOS:   ~/Library/Application Support/PaisaFlow
+        Linux:   $XDG_DATA_HOME/paisaflow (default: ~/.local/share/paisaflow)
         Override: PAISAFLOW_DATA_DIR environment variable
         """
+        import sys
+
         env_dir = os.environ.get("PAISAFLOW_DATA_DIR")
         if env_dir:
             return Path(env_dir).resolve()
 
-        local_app_data = os.environ.get("LOCALAPPDATA")
-        if local_app_data:
-            return Path(local_app_data) / "PaisaFlow"
-
-        # Fallback to user home
-        return Path.home() / ".paisaflow"
+        if sys.platform == "win32":
+            local_app_data = os.environ.get("LOCALAPPDATA")
+            if local_app_data:
+                return Path(local_app_data) / "PaisaFlow"
+            return Path.home() / "AppData" / "Local" / "PaisaFlow"
+        elif sys.platform == "darwin":
+            return Path.home() / "Library" / "Application Support" / "PaisaFlow"
+        else:
+            # Linux and other Unix systems following XDG Base Directory specification
+            xdg_data = os.environ.get("XDG_DATA_HOME")
+            if xdg_data:
+                return Path(xdg_data) / "paisaflow"
+            return Path.home() / ".local" / "share" / "paisaflow"
 
     @property
     def data_dir(self) -> Path:

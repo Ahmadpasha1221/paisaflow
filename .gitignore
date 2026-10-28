@@ -43,7 +43,10 @@ ENV/
 *.log
 local_data/
 
-# Testing
+# Testing & Tool Caches
 .pytest_cache/
+.ruff_cache/
 .coverage
 htmlcov/
+.kilo/
+.freebuff/
